@@ -131,7 +131,8 @@ def find_checkerboard_corners(
 def calibrate_camera(
     obj_points: list,
     img_points: list,
-    image_size: tuple
+    image_size: tuple,
+    use_lens_init: bool = True
 ) -> tuple:
     """
     Calibrate camera using detected corners.
@@ -140,6 +141,7 @@ def calibrate_camera(
         obj_points: 3D object points
         img_points: 2D image points
         image_size: Image size (width, height)
+        use_lens_init: Use lens-based initial camera matrix estimate
         
     Returns:
         Tuple of (ret, camera_matrix, dist_coeffs, rvecs, tvecs)
@@ -148,12 +150,32 @@ def calibrate_camera(
     
     logger.info("Starting camera calibration...")
     
+    # Get initial camera matrix from lens specs if available
+    camera_matrix_init = None
+    flags = 0
+    
+    if use_lens_init:
+        try:
+            from src.utils import load_lens_config
+            lens_config = load_lens_config()
+            
+            if lens_config:
+                camera_matrix_init = lens_config['camera_matrix']
+                flags = cv2.CALIB_USE_INTRINSIC_GUESS
+                logger.info(f"Using lens-based initial camera matrix:")
+                logger.info(f"  fx = {lens_config['fx']:.1f} pixels")
+                logger.info(f"  fy = {lens_config['fy']:.1f} pixels")
+                logger.info(f"  Field of View: {lens_config['fov']['horizontal']:.1f}° × {lens_config['fov']['vertical']:.1f}°")
+        except Exception as e:
+            logger.warning(f"Could not load lens config for initial guess: {e}")
+    
     ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
         obj_points,
         img_points,
         image_size,
+        camera_matrix_init,
         None,
-        None
+        flags=flags
     )
     
     logger.info(f"Calibration RMS error: {ret:.4f} pixels")

@@ -54,6 +54,25 @@ def main():
         config = load_config()
         camera_config = config.get('cameras', {})
         
+        # Display lens configuration if available
+        lens_config = camera_config.get('lens', {})
+        if lens_config:
+            print(f"\nLens Configuration:")
+            print(f"  Model: {lens_config.get('model', 'Unknown')}")
+            print(f"  Focal length: {lens_config.get('focal_length_mm', 'Unknown')}mm")
+            print(f"  F-number: f/{lens_config.get('f_number', 'Unknown')}")
+            
+            # Calculate and display FOV
+            try:
+                from src.utils import load_lens_config
+                optical = load_lens_config()
+                if optical:
+                    fov = optical['fov']
+                    print(f"  Field of View: {fov['horizontal']:.1f}° × {fov['vertical']:.1f}° (H×V)")
+                    print(f"  Estimated fx/fy: {optical['fx']:.1f} pixels")
+            except Exception as e:
+                logger.warning(f"Could not compute optical parameters: {e}")
+        
         # Determine camera IDs
         left_id = camera_config.get('left_camera', {}).get('serial_number')
         if not left_id:

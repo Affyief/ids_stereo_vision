@@ -31,6 +31,58 @@ A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synch
 - USB 3.0 host controller (one per camera recommended)
 - Checkerboard pattern for calibration (e.g., 9x6 with 25mm squares)
 
+## Lens Configuration
+
+### Supported Lens: IDS-2M12-C0620
+
+This system is configured for the **IDS-2M12-C0620** 6mm C-mount lens:
+
+| Specification | Value |
+|--------------|-------|
+| **Focal Length** | 6mm |
+| **Format** | 1/2" |
+| **F-number** | f/2.0 |
+| **Mount** | C-mount |
+| **Working Distance** | 100mm to ∞ |
+| **Distortion** | <3% |
+
+#### Optical Performance
+
+With the IDS U3-3680XCP-C camera (2592×1944, 5.7×4.3mm sensor):
+
+- **Focal Length (pixels):** fx = fy ≈ 2727 pixels
+- **Field of View:**
+  - Horizontal: 50.7°
+  - Vertical: 39.2°
+  - Diagonal: 62.4°
+
+#### Configuration
+
+Lens specifications are configured in `config/camera_config.yaml`:
+
+```yaml
+cameras:
+  lens:
+    model: "IDS-2M12-C0620"
+    focal_length_mm: 6.0
+    f_number: 2.0
+```
+
+These parameters are used to:
+1. Initialize camera matrix for calibration
+2. Calculate field of view
+3. Estimate depth measurement accuracy
+
+#### Using Different Lenses
+
+To use a different lens:
+
+1. Update `focal_length_mm` in `camera_config.yaml`
+2. Recalibrate cameras (see [Calibration](#calibration))
+3. Common focal lengths for IDS lenses: 4mm, 6mm, 8mm, 12mm, 16mm
+
+**Note:** Ensure your lens format (1/2", 1/3", etc.) is compatible with the 1/2.5" sensor.
+
 ## Software Requirements
 
 ### Operating System

@@ -1,12 +1,18 @@
 stereo:
-  # Estimated baseline (distance between camera centers in mm)
-  # User should measure this physically
-  baseline_mm: 60.0  # typical value, MUST BE MEASURED
+  # Hardware configuration
+  lens:
+    focal_length_mm: 6.0
+    field_of_view_deg:
+      horizontal: 50.7
+      vertical: 39.2
+  
+  # Stereo baseline (measure distance between camera optical centers)
+  baseline_mm: 120.0  # MEASURE THIS: Distance between lens centers on bracket
   
   # Stereo matching algorithm
   algorithm: "SGBM"  # or "BM"
   
-  # SGBM parameters
+  # SGBM parameters optimized for 6mm lens
   sgbm:
     min_disparity: 0
     num_disparities: 128  # must be divisible by 16
@@ -32,9 +38,17 @@ stereo:
     wls_sigma: 1.5
     median_blur: 5  # kernel size, 0 to disable
   
-  # Visualization
+  # Calibration pattern
+  calibration_pattern:
+    type: "chessboard"
+    rows: 9  # Internal corners (not squares)
+    cols: 6
+    square_size_mm: 25.0  # Measure your checkerboard!
+  
+  # Depth range (dependent on baseline and focal length)
+  # For 6mm lens with ~120mm baseline:
   visualization:
     colormap: "TURBO"  # JET, TURBO, HSV, etc.
-    min_distance_m: 0.3  # minimum valid distance
-    max_distance_m: 10.0  # maximum distance to display
+    min_distance_m: 0.3  # minimum valid distance (30cm)
+    max_distance_m: 10.0  # maximum distance to display (10m)
     measurement_points: 9  # grid of distance measurements
