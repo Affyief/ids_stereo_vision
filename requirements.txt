@@ -1,0 +1,7 @@
+numpy>=1.21.0
+opencv-python>=4.5.0
+opencv-contrib-python>=4.5.0
+PyYAML>=5.4
+matplotlib>=3.3.0
+pyueye>=4.95.0  # IDS camera SDK (optional, may need manual installation)
+tqdm>=4.60.0

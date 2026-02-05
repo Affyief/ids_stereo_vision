@@ -1,0 +1,30 @@
+cameras:
+  resolution:
+    width: 2592
+    height: 1944
+  # Can be reduced for better performance:
+  # width: 1296
+  # height: 972
+  
+  framerate: 30
+  exposure: auto  # or specific value in microseconds
+  gain: 1.0
+  pixel_format: "BGR8"  # or "MONO8" for grayscale
+  
+  left_camera:
+    device_id: 0  # or serial number
+    name: "Left Camera"
+  
+  right_camera:
+    device_id: 1  # or serial number
+    name: "Right Camera"
+
+calibration:
+  checkerboard:
+    rows: 9
+    cols: 6
+    square_size: 25  # millimeters
+  
+  capture:
+    num_images: 20  # minimum for good calibration
+    delay: 1.0  # seconds between captures
