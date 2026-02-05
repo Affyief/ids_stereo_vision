@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-Test script to verify camera connections and functionality.
+Test script to verify IDS Peak camera connections and functionality.
 
 This script checks if both cameras are accessible and can capture frames.
+Uses IDS Peak SDK (modern GenICam interface).
 """
 
 import os
 import sys
 import argparse
+import time
 from pathlib import Path
 import cv2
 
@@ -15,11 +17,15 @@ import cv2
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils import setup_logging, load_config, get_project_root, FPSCounter
-from src.camera_interface import create_stereo_camera
+from src.camera_interface_peak import (
+    create_stereo_camera_from_config,
+    list_ids_peak_cameras,
+    IDS_PEAK_AVAILABLE
+)
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Test stereo camera system')
+    parser = argparse.ArgumentParser(description='Test IDS Peak stereo camera system')
     parser.add_argument(
         '--config',
         type=str,
@@ -38,6 +44,48 @@ def main():
     # Setup logging
     logger = setup_logging("INFO")
     
+    logger.info("=" * 70)
+    logger.info("IDS Peak Stereo Camera System Test")
+    logger.info("=" * 70)
+    
+    # Check IDS Peak availability
+    if not IDS_PEAK_AVAILABLE:
+        logger.error("❌ IDS Peak SDK not available!")
+        logger.error("")
+        logger.error("Please install IDS Peak:")
+        logger.error("Linux:")
+        logger.error("  1. Download from: https://en.ids-imaging.com/downloads.html")
+        logger.error("  2. Install: sudo dpkg -i ids-peak_*.deb")
+        logger.error("  3. Install Python bindings:")
+        logger.error("     pip install /opt/ids/peak/lib/python*/ids_peak-*.whl")
+        logger.error("     pip install /opt/ids/peak/lib/python*/ids_peak_ipl-*.whl")
+        logger.error("")
+        logger.error("Windows:")
+        logger.error("  Download and run installer from IDS website")
+        return 1
+    
+    logger.info("\n✓ IDS Peak SDK detected")
+    
+    # List available cameras
+    logger.info("\nScanning for cameras...")
+    cameras = list_ids_peak_cameras()
+    
+    if len(cameras) == 0:
+        logger.error("❌ No cameras detected!")
+        logger.error("\nTroubleshooting:")
+        logger.error("  1. Check USB 3.0 connections")
+        logger.error("  2. Verify IDS Peak Cockpit can see cameras")
+        logger.error("  3. Linux: Check permissions (sudo usermod -a -G video $USER)")
+        logger.error("  4. Run: python scripts/list_cameras.py")
+        return 1
+    
+    logger.info(f"✓ Found {len(cameras)} camera(s):")
+    for cam in cameras:
+        logger.info(f"  [{cam['index']}] {cam['model']} (S/N: {cam['serial']})")
+    
+    if len(cameras) < 2:
+        logger.warning("\n⚠ Warning: Only 1 camera detected. Stereo requires 2 cameras.")
+    
     # Get project root
     project_root = get_project_root()
     
@@ -45,45 +93,66 @@ def main():
     config_path = os.path.join(project_root, args.config)
     config = load_config(config_path)
     
-    logger.info("=" * 60)
-    logger.info("Stereo Camera System Test")
-    logger.info("=" * 60)
-    logger.info("\nCamera Configuration:")
+    logger.info("\n" + "=" * 70)
+    logger.info("Camera Configuration:")
+    logger.info("=" * 70)
     logger.info(f"  Resolution: {config['cameras']['resolution']['width']}x{config['cameras']['resolution']['height']}")
     logger.info(f"  Frame rate: {config['cameras']['framerate']} fps")
-    logger.info(f"  Left camera ID: {config['cameras']['left_camera']['device_id']}")
-    logger.info(f"  Right camera ID: {config['cameras']['right_camera']['device_id']}")
-    logger.info("=" * 60 + "\n")
+    logger.info(f"  Exposure: {config['cameras'].get('exposure_us', 'auto')} µs")
+    logger.info(f"  Gain: {config['cameras'].get('gain', 1.0)}")
+    logger.info(f"  Pixel format: {config['cameras'].get('pixel_format', 'BGR8')}")
+    
+    if config['cameras'].get('use_serial_numbers', False):
+        logger.info(f"  Left S/N: {config['cameras']['left_camera'].get('serial_number', 'Not set')}")
+        logger.info(f"  Right S/N: {config['cameras']['right_camera'].get('serial_number', 'Not set')}")
+    else:
+        logger.info(f"  Left index: {config['cameras']['left_camera'].get('device_index', 0)}")
+        logger.info(f"  Right index: {config['cameras']['right_camera'].get('device_index', 1)}")
+    
+    logger.info("=" * 70 + "\n")
     
     # Initialize cameras
-    logger.info("Initializing cameras...")
-    stereo_camera = create_stereo_camera(config)
+    logger.info("Initializing stereo camera system...")
+    stereo_camera = create_stereo_camera_from_config(config)
     
-    if not stereo_camera.open():
-        logger.error("Failed to open cameras!")
-        logger.info("\nTroubleshooting:")
-        logger.info("1. Check that both cameras are connected")
-        logger.info("2. Verify camera device IDs in config/camera_config.yaml")
-        logger.info("3. Try listing available cameras with: ls /dev/video*")
-        logger.info("4. Ensure no other application is using the cameras")
+    # Get parameters from config
+    width = config['cameras']['resolution']['width']
+    height = config['cameras']['resolution']['height']
+    exposure_us = config['cameras'].get('exposure_us')
+    gain = config['cameras'].get('gain')
+    pixel_format = config['cameras'].get('pixel_format', 'BGR8')
+    
+    if not stereo_camera.initialize(
+        width=width,
+        height=height,
+        exposure_us=exposure_us,
+        gain=gain,
+        pixel_format=pixel_format
+    ):
+        logger.error("❌ Failed to initialize cameras!")
+        logger.error("\nTroubleshooting:")
+        logger.error("1. Verify serial numbers in config match detected cameras")
+        logger.error("2. Run: python scripts/list_cameras.py")
+        logger.error("3. Check that cameras are not in use by another application")
+        logger.error("4. Try with device_index instead of serial_number")
         return 1
     
-    logger.info("✓ Cameras opened successfully!\n")
+    logger.info("✓ Cameras initialized successfully!\n")
     
     # Test frame capture
     logger.info("Testing frame capture...")
-    left_frame, right_frame = stereo_camera.capture_frames()
+    left_frame, right_frame = stereo_camera.capture_stereo_pair()
     
     if left_frame is None:
         logger.error("✗ Failed to capture frame from left camera")
-        stereo_camera.close()
+        stereo_camera.release()
         return 1
     else:
         logger.info(f"✓ Left camera: {left_frame.shape}")
     
     if right_frame is None:
         logger.error("✗ Failed to capture frame from right camera")
-        stereo_camera.close()
+        stereo_camera.release()
         return 1
     else:
         logger.info(f"✓ Right camera: {right_frame.shape}\n")
@@ -97,13 +166,12 @@ def main():
     
     fps_counter = FPSCounter()
     frame_count = 0
-    import time
     start_time = time.time()
     
     try:
         while True:
             # Capture frames
-            left_frame, right_frame = stereo_camera.capture_frames()
+            left_frame, right_frame = stereo_camera.capture_stereo_pair()
             
             if left_frame is None or right_frame is None:
                 logger.warning("Failed to capture frames")
@@ -162,20 +230,20 @@ def main():
     
     finally:
         # Cleanup
-        stereo_camera.close()
+        stereo_camera.release()
         cv2.destroyAllWindows()
     
     # Print summary
     elapsed_time = time.time() - start_time
     avg_fps = frame_count / elapsed_time if elapsed_time > 0 else 0
     
-    logger.info("\n" + "=" * 60)
+    logger.info("\n" + "=" * 70)
     logger.info("Test Summary:")
-    logger.info("=" * 60)
+    logger.info("=" * 70)
     logger.info(f"Frames captured: {frame_count}")
     logger.info(f"Duration: {elapsed_time:.1f} seconds")
     logger.info(f"Average FPS: {avg_fps:.1f}")
-    logger.info("=" * 60 + "\n")
+    logger.info("=" * 70 + "\n")
     
     logger.info("✓ Camera test completed successfully!")
     logger.info("\nNext steps:")
