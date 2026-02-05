@@ -73,42 +73,30 @@ def diagnose_cameras():
                         marker = "← CURRENT" if is_current else ""
                         print(f"  - {format_name} {marker}")
                 
-                # Try to set BGR8
-                print(f"\nAttempting to set BGR8...")
-                try:
-                    for entry in entries:
-                        if entry.SymbolicValue() == "BGR8":
-                            pixel_format_node.SetCurrentEntry(entry)
-                            current = pixel_format_node.CurrentEntry().SymbolicValue()
-                            print(f"✓ Success! Current format: {current}")
-                            break
-                except Exception as e:
-                    print(f"✗ Failed: {e}")
-                    
-                    # Try RGB8
-                    print(f"\nAttempting to set RGB8...")
+                # Try to set color formats in order of preference
+                color_formats = ["BGR8", "RGB8", "BayerRG8"]
+                format_set_successfully = False
+                
+                for format_name in color_formats:
+                    print(f"\nAttempting to set {format_name}...")
                     try:
                         for entry in entries:
-                            if entry.SymbolicValue() == "RGB8":
+                            if entry.SymbolicValue() == format_name:
                                 pixel_format_node.SetCurrentEntry(entry)
                                 current = pixel_format_node.CurrentEntry().SymbolicValue()
                                 print(f"✓ Success! Current format: {current}")
-                                break
-                    except Exception as e2:
-                        print(f"✗ Failed: {e2}")
-                        
-                        # Try Bayer formats
-                        print(f"\nAttempting to set BayerRG8...")
-                        try:
-                            for entry in entries:
-                                if entry.SymbolicValue() == "BayerRG8":
-                                    pixel_format_node.SetCurrentEntry(entry)
-                                    current = pixel_format_node.CurrentEntry().SymbolicValue()
-                                    print(f"✓ Success! Current format: {current}")
+                                if "Bayer" in format_name:
                                     print("Note: Bayer format will be demosaiced to BGR in capture")
-                                    break
-                        except Exception as e3:
-                            print(f"✗ Failed: {e3}")
+                                format_set_successfully = True
+                                break
+                    except Exception as e:
+                        print(f"✗ Failed: {e}")
+                    
+                    if format_set_successfully:
+                        break
+                
+                if not format_set_successfully:
+                    print("\n✗ Could not set any color format!")
             else:
                 print("✗ PixelFormat node not found!")
             

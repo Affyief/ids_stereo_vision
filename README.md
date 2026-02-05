@@ -432,7 +432,7 @@ This will show:
 
 1. **Check camera logs during initialization:**
    ```bash
-   python scripts/test_cameras.py 2>&1 | grep -i "pixel\|format\|color\|channel"
+   python scripts/test_cameras.py 2>&1 | grep -E 'pixel|format|color|channel'
    ```
    
    You should see:

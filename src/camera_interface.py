@@ -22,6 +22,15 @@ class IDSPeakCamera:
     """
     Modern IDS Peak camera interface
     Supports USB3 Vision cameras with GenICam
+    
+    Attributes:
+        serial_number: Camera serial number for identification (optional)
+        device_index: Device index if serial number not provided
+        device: IDS Peak device handle
+        datastream: Data stream for frame capture
+        nodemap_remote_device: GenICam nodemap for camera configuration
+        buffers: List of allocated frame buffers
+        actual_pixel_format: Currently active pixel format on the camera (set during initialization)
     """
     
     def __init__(self, serial_number: Optional[str] = None, device_index: int = 0):
@@ -100,7 +109,7 @@ class IDSPeakCamera:
             
             # Configure camera
             config_result = self._configure_camera(width, height, exposure_us, gain_db, framerate, pixel_format)
-            if config_result is False:
+            if not config_result:
                 logger.error("Camera configuration failed")
                 return False
             
@@ -154,9 +163,9 @@ class IDSPeakCamera:
             
             # Get available formats
             pixel_format_entries = pixel_format_node.Entries()
-            available_formats = [entry.SymbolicValue() for entry in pixel_format_entries if entry.IsAvailable()]
+            available_formats = {entry.SymbolicValue() for entry in pixel_format_entries if entry.IsAvailable()}
             
-            logger.info(f"Available pixel formats: {available_formats}")
+            logger.info(f"Available pixel formats: {sorted(available_formats)}")
             
             # Try to set requested format
             format_set = False
