@@ -1,0 +1,40 @@
+stereo:
+  # Estimated baseline (distance between camera centers in mm)
+  # User should measure this physically
+  baseline_mm: 60.0  # typical value, MUST BE MEASURED
+  
+  # Stereo matching algorithm
+  algorithm: "SGBM"  # or "BM"
+  
+  # SGBM parameters
+  sgbm:
+    min_disparity: 0
+    num_disparities: 128  # must be divisible by 16
+    block_size: 11  # odd number, typically 5-21
+    P1: 600  # penalty on disparity change of +/-1
+    P2: 2400  # penalty on larger disparity changes
+    disp12_max_diff: 1
+    uniqueness_ratio: 10
+    speckle_window_size: 100
+    speckle_range: 32
+    mode: "HH"  # Hirschmuller mode
+  
+  # Block Matching parameters (if using BM)
+  bm:
+    min_disparity: 0
+    num_disparities: 128
+    block_size: 15
+    
+  # Post-processing
+  post_process:
+    use_wls_filter: true
+    wls_lambda: 8000
+    wls_sigma: 1.5
+    median_blur: 5  # kernel size, 0 to disable
+  
+  # Visualization
+  visualization:
+    colormap: "TURBO"  # JET, TURBO, HSV, etc.
+    min_distance_m: 0.3  # minimum valid distance
+    max_distance_m: 10.0  # maximum distance to display
+    measurement_points: 9  # grid of distance measurements
