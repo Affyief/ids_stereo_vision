@@ -22,6 +22,15 @@ class IDSPeakCamera:
     """
     Modern IDS Peak camera interface
     Supports USB3 Vision cameras with GenICam
+    
+    Attributes:
+        serial_number: Camera serial number for identification (optional)
+        device_index: Device index if serial number not provided
+        device: IDS Peak device handle
+        datastream: Data stream for frame capture
+        nodemap_remote_device: GenICam nodemap for camera configuration
+        buffers: List of allocated frame buffers
+        actual_pixel_format: Currently active pixel format on the camera (set during initialization)
     """
     
     def __init__(self, serial_number: Optional[str] = None, device_index: int = 0):
@@ -31,6 +40,7 @@ class IDSPeakCamera:
         self.datastream = None
         self.nodemap_remote_device = None
         self.buffers = []
+        self.actual_pixel_format = None
         
     def initialize(self, width: int = 2592, height: int = 1944, 
                    exposure_us: float = 10000, gain_db: float = 0.0,
@@ -98,7 +108,10 @@ class IDSPeakCamera:
             self.nodemap_remote_device = self.device.RemoteDevice().NodeMaps()[0]
             
             # Configure camera
-            self._configure_camera(width, height, exposure_us, gain_db, framerate, pixel_format)
+            config_result = self._configure_camera(width, height, exposure_us, gain_db, framerate, pixel_format)
+            if not config_result:
+                logger.error("Camera configuration failed")
+                return False
             
             # Setup data stream
             self._setup_datastream()
@@ -107,6 +120,22 @@ class IDSPeakCamera:
             self._start_acquisition()
             
             logger.info(f"✓ IDS Peak camera initialized: {target_device.ModelName()} (S/N: {target_device.SerialNumber()})")
+            
+            # TEST CAPTURE to validate color
+            logger.info("Testing color capture...")
+            test_frame = self.capture_frame()
+            
+            if test_frame is not None:
+                if len(test_frame.shape) == 3 and test_frame.shape[2] == 3:
+                    logger.info(f"✓✓✓ COLOR MODE CONFIRMED: {test_frame.shape[2]} channels")
+                elif len(test_frame.shape) == 2:
+                    logger.error(f"✗✗✗ STILL IN MONO MODE! Frame shape: {test_frame.shape}")
+                    logger.error("Camera is not outputting color despite configuration!")
+                else:
+                    logger.warning(f"Unexpected frame format: {test_frame.shape}")
+            else:
+                logger.warning("Test capture returned None")
+            
             return True
             
         except Exception as e:
@@ -121,41 +150,78 @@ class IDSPeakCamera:
         
         nm = self.nodemap_remote_device
         
-        # Set pixel format
+        logger.info(f"Requesting pixel format: {pixel_format}")
+        
+        # Set pixel format FIRST before other settings
         try:
             pixel_format_node = nm.FindNode("PixelFormat")
+            
+            if pixel_format_node is None:
+                logger.error("PixelFormat node not found!")
+                self.actual_pixel_format = None
+                return False
+            
+            # Get available formats
             pixel_format_entries = pixel_format_node.Entries()
+            available_formats = {entry.SymbolicValue() for entry in pixel_format_entries if entry.IsAvailable()}
             
-            # Build a set of available formats for O(1) lookup
-            available_formats = {entry.SymbolicValue() for entry in pixel_format_entries}
+            logger.info(f"Available pixel formats: {sorted(available_formats)}")
             
-            # Try requested format first
-            format_found = False
+            # Try to set requested format
+            format_set = False
+            
+            # Try exact match first
             if pixel_format in available_formats:
-                for entry in pixel_format_entries:
-                    if entry.SymbolicValue() == pixel_format:
-                        pixel_format_node.SetCurrentEntry(entry)
-                        logger.info(f"Set pixel format: {pixel_format}")
-                        format_found = True
-                        break
+                try:
+                    for entry in pixel_format_entries:
+                        if entry.SymbolicValue() == pixel_format:
+                            pixel_format_node.SetCurrentEntry(entry)
+                            current_format = pixel_format_node.CurrentEntry().SymbolicValue()
+                            logger.info(f"✓ Set pixel format to: {current_format}")
+                            format_set = True
+                            break
+                except Exception as e:
+                    logger.warning(f"Failed to set {pixel_format}: {e}")
             
-            # If requested format not found, try fallback options (excluding already tried format)
-            if not format_found:
-                logger.warning(f"Requested format '{pixel_format}' not available, trying fallbacks...")
-                fallback_formats = ["BGR8", "BayerRG8", "BayerBG8", "Mono8"]
+            # Try fallbacks if requested format didn't work
+            if not format_set:
+                fallback_formats = ["BGR8", "RGB8", "BayerRG8", "BayerBG8", "BayerGB8", "BayerGR8", "Mono8"]
                 
                 for fallback in fallback_formats:
-                    if fallback != pixel_format and fallback in available_formats:
-                        for entry in pixel_format_entries:
-                            if entry.SymbolicValue() == fallback:
-                                pixel_format_node.SetCurrentEntry(entry)
-                                logger.info(f"Set pixel format (fallback): {fallback}")
-                                format_found = True
-                                break
-                        if format_found:
+                    if fallback == pixel_format:
+                        continue  # Already tried
+                        
+                    if fallback in available_formats:
+                        try:
+                            for entry in pixel_format_entries:
+                                if entry.SymbolicValue() == fallback:
+                                    pixel_format_node.SetCurrentEntry(entry)
+                                    current_format = pixel_format_node.CurrentEntry().SymbolicValue()
+                                    logger.warning(f"Using fallback format: {current_format}")
+                                    format_set = True
+                                    break
+                        except Exception as e:
+                            logger.debug(f"Fallback {fallback} failed: {e}")
+                        
+                        if format_set:
                             break
+            
+            if not format_set:
+                logger.error("Could not set any color format! Camera may be in mono mode.")
+                self.actual_pixel_format = None
+                return False
+            
+            # Verify the format was set
+            current_format = pixel_format_node.CurrentEntry().SymbolicValue()
+            logger.info(f"Camera is now using pixel format: {current_format}")
+            
+            # Store actual format being used
+            self.actual_pixel_format = current_format
+            
         except Exception as e:
-            logger.warning(f"Could not set pixel format: {e}")
+            logger.error(f"Error configuring pixel format: {e}")
+            self.actual_pixel_format = None
+            return False
         
         # Set width and height
         try:
@@ -249,7 +315,7 @@ class IDSPeakCamera:
             timeout_ms: Timeout in milliseconds
             
         Returns:
-            numpy array with image data (BGR8 or Mono8) or None if failed
+            numpy array with image data (BGR8, RGB8, or Mono8) or None if failed
         """
         
         if not self.datastream:
@@ -269,19 +335,61 @@ class IDSPeakCamera:
                 buffer.Height()
             )
             
-            # Convert to numpy array
-            # Check if color or mono
-            if ipl_image.PixelFormat().NumChannels() == 3:
-                # Color image (BGR)
+            # Check pixel format
+            ipl_format = ipl_image.PixelFormat()
+            logger.debug(f"Buffer pixel format: {ipl_format.Name()}")
+            
+            # Convert to numpy based on format
+            if ipl_format.NumChannels() == 3:
+                # Color image (BGR8, RGB8)
                 numpy_image = ipl_image.get_numpy_3D()
+                logger.debug(f"Captured COLOR frame: {numpy_image.shape}")
+                
+            elif ipl_format.NumChannels() == 1:
+                # Check if it's Bayer (needs demosaicing)
+                format_name = ipl_format.Name()
+                
+                if "Bayer" in format_name:
+                    # Demosaic Bayer to BGR
+                    logger.debug(f"Demosaicing Bayer pattern: {format_name}")
+                    
+                    try:
+                        # Convert Bayer to BGR8 using IPL converter
+                        converter = ipl.ImageConverter()
+                        
+                        # Create target format
+                        target_format = ipl.PixelFormatName_BGR8
+                        
+                        # Convert
+                        converted_image = converter.Convert(ipl_image, target_format)
+                        numpy_image = converted_image.get_numpy_3D()
+                        
+                        logger.info(f"Demosaiced Bayer to BGR: {numpy_image.shape}")
+                        
+                    except Exception as e:
+                        logger.error(f"Failed to demosaic Bayer: {e}")
+                        # Fallback to grayscale
+                        numpy_image = ipl_image.get_numpy_1D().reshape(
+                            (ipl_image.Height(), ipl_image.Width())
+                        )
+                        logger.warning(f"Using raw Bayer as MONO: {numpy_image.shape}")
+                    
+                else:
+                    # True monochrome
+                    numpy_image = ipl_image.get_numpy_1D().reshape(
+                        (ipl_image.Height(), ipl_image.Width())
+                    )
+                    logger.warning(f"Captured MONO frame: {numpy_image.shape}")
             else:
-                # Mono image
-                numpy_image = ipl_image.get_numpy_1D().reshape(
-                    (ipl_image.Height(), ipl_image.Width())
-                )
+                logger.error(f"Unexpected channel count: {ipl_format.NumChannels()}")
+                numpy_image = None
             
             # Requeue buffer for next capture
             self.datastream.QueueBuffer(buffer)
+            
+            # Validate color
+            if numpy_image is not None and len(numpy_image.shape) == 3:
+                logger.debug(f"✓ Color frame validated: {numpy_image.shape[2]} channels")
             
             return numpy_image
             
@@ -407,6 +515,14 @@ class StereoCameraSystem:
         
         left_frame = self.left_camera.capture_frame(timeout_ms)
         right_frame = self.right_camera.capture_frame(timeout_ms)
+        
+        # Validate both are color
+        if left_frame is not None and right_frame is not None:
+            left_is_color = len(left_frame.shape) == 3 and left_frame.shape[2] == 3
+            right_is_color = len(right_frame.shape) == 3 and right_frame.shape[2] == 3
+            
+            if not left_is_color or not right_is_color:
+                logger.warning(f"Color validation failed! Left: {left_frame.shape}, Right: {right_frame.shape}")
         
         return left_frame, right_frame
     
