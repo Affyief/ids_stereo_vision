@@ -68,9 +68,11 @@ def main():
         framerate = camera_config.get('framerate', 30)
         exposure = camera_config.get('exposure_us', 10000)
         gain = camera_config.get('gain_db', 0.0)
+        pixel_format = camera_config.get('pixel_format', 'BGR8')
         
         print(f"  Resolution: {width}x{height}")
         print(f"  Frame rate: {framerate} fps")
+        print(f"  Pixel format: {pixel_format}")
         print(f"  Left camera: {left_id}")
         print(f"  Right camera: {right_id}")
         
@@ -82,7 +84,7 @@ def main():
     print("\n3. Initializing stereo camera system...")
     stereo = StereoCameraSystem(left_id=left_id, right_id=right_id)
     
-    if not stereo.initialize(width, height, exposure, gain, framerate):
+    if not stereo.initialize(width, height, exposure, gain, framerate, pixel_format):
         print("✗ Failed to initialize cameras!")
         return 1
     

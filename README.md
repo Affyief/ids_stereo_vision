@@ -5,6 +5,7 @@ A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synch
 ## Features
 
 - **Dual Camera Support**: Interface with two IDS U3-3680XCP-C cameras via modern IDS Peak SDK
+- **Color Camera Support**: Full RGB/BGR color capture with configurable pixel formats
 - **Camera Calibration**: Complete calibration pipeline for intrinsic and extrinsic parameters
 - **Stereo Matching**: High-quality depth computation using SGBM (Semi-Global Block Matching)
 - **Real-time Visualization**: Live depth maps with color-coded distance overlays
@@ -177,6 +178,10 @@ The application will:
 
 ```yaml
 cameras:
+  # Pixel format for color cameras
+  # Options: BGR8 (color, OpenCV native), RGB8 (color), BayerRG8 (raw Bayer), Mono8 (grayscale)
+  pixel_format: "BGR8"  # Use BGR8 for color cameras like IDS U3-3680XCP-C
+  
   resolution:
     width: 2592      # Full resolution
     height: 1944
@@ -234,6 +239,39 @@ stereo:
     max_distance_m: 10.0
     measurement_points: 9   # Grid of distance measurements
 ```
+
+## Color Camera Support
+
+### Pixel Format Configuration
+
+The IDS U3-3680XCP-C cameras are **color cameras** with a Bayer color filter. The system supports multiple pixel formats:
+
+| Format | Type | Channels | Description | Use Case |
+|--------|------|----------|-------------|----------|
+| **BGR8** | Color | 3 | 8-bit color, OpenCV native format | **Default for color cameras** |
+| **RGB8** | Color | 3 | 8-bit color, standard RGB | Alternative color format |
+| **BayerRG8** | Raw | 1 | Raw Bayer pattern (needs demosaicing) | Advanced processing |
+| **Mono8** | Grayscale | 1 | 8-bit monochrome | For grayscale-only applications |
+
+**Recommended setting**: Use **`BGR8`** for color cameras as it's the native format for OpenCV and provides the best performance.
+
+Configure the pixel format in `config/camera_config.yaml`:
+
+```yaml
+cameras:
+  pixel_format: "BGR8"  # Use BGR8 for IDS U3-3680XCP-C color cameras
+```
+
+### Color vs. Grayscale for Stereo Vision
+
+**Note**: OpenCV's stereo matching algorithms (SGBM, BM) internally convert images to grayscale for disparity computation. However, capturing in color provides these benefits:
+
+- **Better visualization**: Color images are easier to interpret
+- **Post-processing**: Color information can be used for segmentation or filtering
+- **Recording**: Captured images maintain full color information
+- **Debugging**: Easier to identify objects and verify calibration
+
+The stereo depth computation will work correctly with both color and grayscale inputs.
 
 ## Keyboard Controls
 
