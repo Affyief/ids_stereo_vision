@@ -9,9 +9,12 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.camera_interface import list_ids_peak_cameras
 import logging
+import cv2
+import numpy as np
 
 try:
     from ids_peak import ids_peak as peak
+    from ids_peak_ipl import ids_peak_ipl as ipl
     IDS_PEAK_AVAILABLE = True
 except ImportError:
     IDS_PEAK_AVAILABLE = False
@@ -73,30 +76,93 @@ def diagnose_cameras():
                         marker = "← CURRENT" if is_current else ""
                         print(f"  - {format_name} {marker}")
                 
-                # Try to set color formats in order of preference
-                color_formats = ["BGR8", "RGB8", "BayerRG8"]
-                format_set_successfully = False
+                # Try to set Bayer formats and test conversion
+                print(f"\nTesting Bayer to BGR conversion...")
+                bayer_format_set = False
                 
-                for format_name in color_formats:
-                    print(f"\nAttempting to set {format_name}...")
+                # Try to set BayerGR8
+                if any(entry.SymbolicValue() == "BayerGR8" for entry in entries if entry.IsAvailable()):
                     try:
                         for entry in entries:
-                            if entry.SymbolicValue() == format_name:
+                            if entry.SymbolicValue() == "BayerGR8":
+                                pixel_format_node.SetCurrentEntry(entry)
+                                current = pixel_format_node.CurrentEntry().SymbolicValue()
+                                print(f"✓ Set format to: {current}")
+                                bayer_format_set = True
+                                break
+                    except Exception as e:
+                        print(f"✗ Failed to set BayerGR8: {e}")
+                
+                # Test Bayer capture and conversion
+                if bayer_format_set:
+                    try:
+                        # Setup minimal data stream for test
+                        datastreams = device.DataStreams()
+                        if datastreams:
+                            datastream = datastreams[0].OpenDataStream()
+                            
+                            # Allocate buffer
+                            payload_size = nodemap.FindNode("PayloadSize").Value()
+                            buffer = datastream.AllocAndAnnounceBuffer(payload_size)
+                            datastream.QueueBuffer(buffer)
+                            
+                            # Start acquisition
+                            datastream.StartAcquisition()
+                            nodemap.FindNode("TLParamsLocked").SetValue(1)
+                            nodemap.FindNode("AcquisitionStart").Execute()
+                            nodemap.FindNode("AcquisitionStart").WaitUntilDone()
+                            
+                            # Capture a frame
+                            buffer = datastream.WaitForFinishedBuffer(5000)
+                            
+                            # Convert to IPL image
+                            ipl_image = ipl.Image.CreateFromSizeAndBuffer(
+                                buffer.PixelFormat(),
+                                buffer.BasePtr(),
+                                buffer.Size(),
+                                buffer.Width(),
+                                buffer.Height()
+                            )
+                            
+                            # Get as 2D numpy array (raw Bayer)
+                            numpy_image = ipl_image.get_numpy_2D()
+                            
+                            # Demosaic using OpenCV
+                            bgr_image = cv2.cvtColor(numpy_image, cv2.COLOR_BayerGR2BGR)
+                            
+                            print(f"✓ Bayer conversion successful!")
+                            print(f"  Input: {numpy_image.shape} (Bayer raw)")
+                            print(f"  Output: {bgr_image.shape} (BGR color)")
+                            print(f"  Channels: {bgr_image.shape[2]}")
+                            
+                            # Stop acquisition
+                            nodemap.FindNode("AcquisitionStop").Execute()
+                            datastream.KillWait()
+                            datastream.StopAcquisition(peak.AcquisitionStopMode_Default)
+                            datastream.Flush(peak.DataStreamFlushMode_DiscardAll)
+                            datastream.RevokeBuffer(buffer)
+                            
+                    except Exception as e:
+                        print(f"✗ Bayer conversion test failed: {e}")
+                        import traceback
+                        traceback.print_exc()
+                
+                # Also try to set BGR8 if available
+                print(f"\nAttempting to set BGR8...")
+                try:
+                    bgr8_available = any(entry.SymbolicValue() == "BGR8" for entry in entries if entry.IsAvailable())
+                    if bgr8_available:
+                        for entry in entries:
+                            if entry.SymbolicValue() == "BGR8":
                                 pixel_format_node.SetCurrentEntry(entry)
                                 current = pixel_format_node.CurrentEntry().SymbolicValue()
                                 print(f"✓ Success! Current format: {current}")
-                                if "Bayer" in format_name:
-                                    print("Note: Bayer format will be demosaiced to BGR in capture")
-                                format_set_successfully = True
                                 break
-                    except Exception as e:
-                        print(f"✗ Failed: {e}")
-                    
-                    if format_set_successfully:
-                        break
-                
-                if not format_set_successfully:
-                    print("\n✗ Could not set any color format!")
+                    else:
+                        print(f"✗ BGR8 not available")
+                        print(f"Note: Use Bayer format with automatic demosaicing")
+                except Exception as e:
+                    print(f"✗ Failed: {e}")
             else:
                 print("✗ PixelFormat node not found!")
             
@@ -104,6 +170,8 @@ def diagnose_cameras():
             
         except Exception as e:
             print(f"Error opening camera: {e}")
+            import traceback
+            traceback.print_exc()
     
     peak.Library.Close()
     print(f"\n{'='*60}\n")

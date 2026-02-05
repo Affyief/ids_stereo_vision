@@ -231,8 +231,9 @@ The application will:
 ```yaml
 cameras:
   # Pixel format for color cameras
-  # Options: BGR8 (color, OpenCV native), RGB8 (color), BayerRG8 (raw Bayer), Mono8 (grayscale)
-  pixel_format: "BGR8"  # Use BGR8 for color cameras like IDS U3-3680XCP-C
+  # Options: BayerGR8 (raw Bayer, auto-demosaiced), BayerRG8, BayerBG8, BayerGB8
+  #          BGR8 (color, OpenCV native - only if supported), RGB8 (color), Mono8 (grayscale)
+  pixel_format: "BayerGR8"  # Use BayerGR8 for IDS U3-3680XCP-C (auto-demosaiced to BGR)
   
   resolution:
     width: 2592      # Full resolution
@@ -294,24 +295,64 @@ stereo:
 
 ## Color Camera Support
 
+### Color Image Processing
+
+#### Bayer Pattern Format
+
+The IDS U3-3680XCP-C cameras output **Bayer pattern** (raw color data), not pre-processed RGB/BGR. This is standard for industrial cameras.
+
+**How it works:**
+
+1. Camera captures: **BayerGR8** (raw 8-bit Bayer pattern)
+2. Python converts: **BayerGR8 → BGR8** (OpenCV demosaicing)
+3. You receive: **Full color BGR8 images** (3 channels)
+
+**Bayer Pattern:**
+```
+G R G R G R
+B G B G B G
+G R G R G R
+B G B G B G
+```
+
+The software automatically demosaics this to full RGB color using `cv2.cvtColor()`.
+
+**Configuration:**
+
+```yaml
+cameras:
+  pixel_format: "BayerGR8"  # Raw Bayer (auto-converted to BGR)
+```
+
+**Supported Bayer formats:**
+- `BayerGR8` - Green-Red pattern (most common)
+- `BayerRG8` - Red-Green pattern
+- `BayerBG8` - Blue-Green pattern
+- `BayerGB8` - Green-Blue pattern
+
+**Performance:** Demosaicing adds ~1-2ms per frame (negligible at 30 fps).
+
 ### Pixel Format Configuration
 
 The IDS U3-3680XCP-C cameras are **color cameras** with a Bayer color filter. The system supports multiple pixel formats:
 
 | Format | Type | Channels | Description | Use Case |
 |--------|------|----------|-------------|----------|
-| **BGR8** | Color | 3 | 8-bit color, OpenCV native format | **Default for color cameras** |
-| **RGB8** | Color | 3 | 8-bit color, standard RGB | Alternative color format |
-| **BayerRG8** | Raw | 1 | Raw Bayer pattern (needs demosaicing) | Advanced processing |
+| **BayerGR8** | Raw Bayer | 1 → 3 | Raw Bayer pattern (auto-demosaiced to BGR) | **Default for IDS U3-3680XCP-C** |
+| **BayerRG8** | Raw Bayer | 1 → 3 | Raw Bayer pattern (auto-demosaiced to BGR) | Alternative Bayer pattern |
+| **BayerBG8** | Raw Bayer | 1 → 3 | Raw Bayer pattern (auto-demosaiced to BGR) | Alternative Bayer pattern |
+| **BayerGB8** | Raw Bayer | 1 → 3 | Raw Bayer pattern (auto-demosaiced to BGR) | Alternative Bayer pattern |
+| **BGR8** | Color | 3 | 8-bit color, OpenCV native format | Only if camera supports direct color |
+| **RGB8** | Color | 3 | 8-bit color, standard RGB | Only if camera supports direct color |
 | **Mono8** | Grayscale | 1 | 8-bit monochrome | For grayscale-only applications |
 
-**Recommended setting**: Use **`BGR8`** for color cameras as it's the native format for OpenCV and provides the best performance.
+**Recommended setting**: Use **`BayerGR8`** for IDS U3-3680XCP-C cameras as it's the native output format. The system automatically demosaics to BGR8.
 
 Configure the pixel format in `config/camera_config.yaml`:
 
 ```yaml
 cameras:
-  pixel_format: "BGR8"  # Use BGR8 for IDS U3-3680XCP-C color cameras
+  pixel_format: "BayerGR8"  # Use BayerGR8 for IDS U3-3680XCP-C (auto-demosaiced to BGR)
 ```
 
 ### Color vs. Grayscale for Stereo Vision
@@ -436,17 +477,19 @@ This will show:
    ```
    
    You should see:
-   - `"Requesting pixel format: BGR8"`
-   - `"Available pixel formats: ['BGR8', ...]"`
-   - `"✓ Set pixel format to: BGR8"`
-   - `"✓✓✓ COLOR MODE CONFIRMED: 3 channels"`
+   - `"Requesting pixel format: BayerGR8"` (or other Bayer format)
+   - `"Available pixel formats: ['BayerGR8', ...]"`
+   - `"✓ Set pixel format to: BayerGR8"`
+   - `"Demosaiced BayerGR8 to BGR"`
+   - `"✓ COLOR MODE CONFIRMED: 3 channels"` (in test output)
 
-2. **If BGR8 is not available:**
-   - Try `RGB8` in `config/camera_config.yaml`
-   - Try Bayer formats (`BayerRG8`, `BayerBG8`, etc.) - these will be automatically demosaiced to BGR
+2. **If Bayer formats are available but BGR8 is not:**
+   - Use `BayerGR8` in `config/camera_config.yaml` (default)
+   - System will automatically demosaic to BGR8 color images
+   - Try other Bayer variants (`BayerRG8`, `BayerBG8`, `BayerGB8`) if needed
 
-3. **Verify camera model:**
-   - Ensure cameras are color variants (U3-3680XCP-**C**), not mono (U3-3680XCP-M)
+3. **If no Bayer or color formats are available:**
+   - Verify camera model: Ensure cameras are color variants (U3-3680XCP-**C**), not mono (U3-3680XCP-M)
    - Check with IDS Peak Cockpit that cameras show color
 
 4. **Check for SDK issues:**
@@ -457,7 +500,7 @@ This will show:
    ```python
    from src.camera_interface import IDSPeakCamera
    cam = IDSPeakCamera(device_index=0)
-   cam.initialize(pixel_format="BGR8")
+   cam.initialize(pixel_format="BayerGR8")
    frame = cam.capture_frame()
    print(f"Frame shape: {frame.shape}")  # Should be (H, W, 3) for color
    ```

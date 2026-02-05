@@ -1,11 +1,14 @@
 cameras:
-  # Pixel format for color cameras
+  # Pixel format - IDS U3-3680XCP-C outputs Bayer format (raw color)
+  # Will be automatically demosaiced to BGR8
   # IMPORTANT: If you see monochrome/grayscale images, check:
   # 1. Run: python scripts/diagnose_camera_format.py
   # 2. Check camera logs for "COLOR MODE CONFIRMED" message
   # 3. Ensure cameras ARE color cameras (not mono variants)
-  # Options: BGR8 (preferred for OpenCV), RGB8, BayerRG8 (raw Bayer), Mono8 (grayscale only)
-  pixel_format: "BGR8"
+  # Options: BayerGR8, BayerRG8, BayerBG8, BayerGB8 (raw Bayer, auto-demosaiced)
+  #          BGR8, RGB8 (only if camera supports direct color output)
+  #          Mono8 (grayscale only)
+  pixel_format: "BayerGR8"
   
   # Resolution settings
   resolution:
