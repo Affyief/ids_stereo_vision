@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv
+build/
+dist/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Calibration data
+calibration/chessboard_images/*.png
+calibration/chessboard_images/*.jpg
+
+# Saved data
+output/
+*.ply
+*.npy
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Camera params (user-generated)
+config/camera_params.yaml

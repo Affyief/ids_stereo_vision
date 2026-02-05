@@ -1,0 +1,35 @@
+system:
+  baseline_estimate: 120.0  # mm - approximate distance between camera centers
+  calibration_pattern:
+    type: "chessboard"
+    width: 9  # internal corners
+    height: 6
+    square_size: 25.0  # mm
+  
+stereo_matching:
+  algorithm: "SGBM"  # or "BM"
+  min_disparity: 0
+  num_disparities: 128  # must be divisible by 16
+  block_size: 11
+  uniqueness_ratio: 10
+  speckle_window_size: 100
+  speckle_range: 32
+  disp12_max_diff: 1
+  
+display:
+  window_width: 1920
+  window_height: 1080
+  fps_target: 30
+  depth_color_map: "JET"
+  min_distance: 100  # mm
+  max_distance: 3000  # mm
+  
+cameras:
+  left:
+    device_id: 0  # or specific camera serial
+    exposure: 10  # ms
+    gain: 1.0
+  right:
+    device_id: 1
+    exposure: 10  # ms
+    gain: 1.0
