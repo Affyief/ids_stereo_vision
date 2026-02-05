@@ -66,9 +66,10 @@ def main():
     os.makedirs(left_output, exist_ok=True)
     os.makedirs(right_output, exist_ok=True)
     
-    # Get number of images to capture
-    num_images = args.num_images or config['calibration']['capture']['num_images']
-    delay = config['calibration']['capture']['delay']
+    # Get number of images to capture with backward compatibility
+    capture_config = config['calibration']['capture']
+    num_images = args.num_images or capture_config.get('num_images_min', capture_config.get('num_images', 20))
+    delay = capture_config.get('delay_seconds', capture_config.get('delay', 1.0))
     
     logger.info("=" * 60)
     logger.info("Stereo Camera Calibration Image Capture")

@@ -4,7 +4,7 @@ A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synch
 
 ## Features
 
-- **Dual Camera Support**: Interface with two IDS U3-3680XCP-C cameras via PyuEye SDK or OpenCV fallback
+- **Dual Camera Support**: Interface with two IDS U3-3680XCP-C cameras via modern IDS Peak SDK
 - **Camera Calibration**: Complete calibration pipeline for intrinsic and extrinsic parameters
 - **Stereo Matching**: High-quality depth computation using SGBM (Semi-Global Block Matching)
 - **Real-time Visualization**: Live depth maps with color-coded distance overlays
@@ -15,12 +15,12 @@ A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synch
 ## Hardware Requirements
 
 ### Cameras
-- **Model**: IDS U3-3680XCP-C-HQ (or compatible)
+- **Model**: IDS U3-3680XCP-C (or compatible)
 - **Sensor**: ON Semiconductor AR0521 CMOS
 - **Resolution**: 2592 x 1944 pixels (5.04 MP)
 - **Sensor Size**: 5.702 mm x 4.277 mm (1/2.5" format)
 - **Pixel Size**: 2.2 µm x 2.2 µm
-- **Interface**: USB 3.0
+- **Interface**: USB 3.0 (USB3 Vision, GenICam compliant)
 - **Lens Mount**: C-mount
 - **Frame Rate**: Up to 48-49 fps at full resolution
 
@@ -42,7 +42,7 @@ A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synch
 - OpenCV 4.5+ with contrib modules
 - NumPy
 - PyYAML
-- PyuEye SDK (optional, for IDS cameras)
+- IDS Peak SDK (latest generation, GenICam/GenTL based)
 
 ## Installation
 
@@ -52,35 +52,49 @@ git clone https://github.com/Affyief/ids_stereo_vision.git
 cd ids_stereo_vision
 ```
 
-### 2. Install Python Dependencies
+### 2. Install IDS Peak SDK
+
+**Linux:**
+1. Download IDS Peak from: https://en.ids-imaging.com/downloads.html
+2. Install the package:
+   ```bash
+   sudo dpkg -i ids-peak_*.deb
+   sudo apt-get install -f
+   ```
+3. Install Python bindings:
+   ```bash
+   # Find the wheel files
+   ls /opt/ids/peak/generic_sdk/ipl/binding/python/wheel/x86_64/
+   ls /opt/ids/peak/generic_sdk/api/binding/python/wheel/x86_64/
+   
+   # Install them
+   pip install /opt/ids/peak/generic_sdk/ipl/binding/python/wheel/x86_64/ids_peak_ipl-*.whl
+   pip install /opt/ids/peak/generic_sdk/api/binding/python/wheel/x86_64/ids_peak-*.whl
+   ```
+
+**Windows:**
+1. Download and install IDS Peak from IDS website
+2. Python bindings location:
+   ```
+   C:\Program Files\IDS\ids_peak\generic_sdk\ipl\binding\python\wheel\x86_64\
+   C:\Program Files\IDS\ids_peak\generic_sdk\api\binding\python\wheel\x86_64\
+   ```
+3. Install with pip (use correct paths)
+
+### 3. Install Python Dependencies
+
 ```bash
+cd ids_stereo_vision
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-### 3. Install IDS SDK (Optional but Recommended)
+### 4. Test Cameras
 
-#### Linux
 ```bash
-# Download IDS Software Suite from:
-# https://en.ids-imaging.com/downloads.html
-
-# Extract and install
-tar -xzf ids-software-suite-linux-*.tgz
-cd ids-software-suite-linux-*/
-sudo ./ids-software-suite-linux-*.run
+python scripts/test_cameras.py
 ```
-
-#### Windows
-1. Download IDS Software Suite from https://en.ids-imaging.com/downloads.html
-2. Run the installer
-3. Follow installation wizard
-
-#### Install PyuEye Python Bindings
-```bash
-pip install pyueye
-```
-
-**Note**: If PyuEye is not available, the system will automatically fall back to OpenCV's VideoCapture interface.
 
 ## Quick Start
 
@@ -90,6 +104,8 @@ python scripts/test_cameras.py
 ```
 
 This will:
+- List all available IDS Peak cameras
+- Display camera model, serial number, and interface
 - Verify both cameras are accessible
 - Display live feeds from both cameras
 - Show FPS performance

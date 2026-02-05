@@ -1,7 +1,14 @@
+# Core dependencies
 numpy>=1.21.0
 opencv-python>=4.5.0
 opencv-contrib-python>=4.5.0
 PyYAML>=5.4
 matplotlib>=3.3.0
-pyueye>=4.95.0  # IDS camera SDK (optional, may need manual installation)
+
+# IDS Peak SDK (install separately from IDS website)
+# Then install Python bindings:
+# pip install /opt/ids/peak/generic_sdk/ipl/binding/python/wheel/x86_64/ids_peak_ipl-*.whl
+# pip install /opt/ids/peak/generic_sdk/api/binding/python/wheel/x86_64/ids_peak-*.whl
+
+# Utility
 tqdm>=4.60.0
