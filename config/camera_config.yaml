@@ -1,6 +1,10 @@
 cameras:
   # Pixel format for color cameras
-  # Options: BGR8 (color, OpenCV native), RGB8 (color), BayerRG8 (raw Bayer), Mono8 (grayscale)
+  # IMPORTANT: If you see monochrome/grayscale images, check:
+  # 1. Run: python scripts/diagnose_camera_format.py
+  # 2. Check camera logs for "COLOR MODE CONFIRMED" message
+  # 3. Ensure cameras ARE color cameras (not mono variants)
+  # Options: BGR8 (preferred for OpenCV), RGB8, BayerRG8 (raw Bayer), Mono8 (grayscale only)
   pixel_format: "BGR8"
   
   # Resolution settings

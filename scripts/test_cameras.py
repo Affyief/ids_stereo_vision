@@ -121,6 +121,9 @@ def main():
     start_time = time.time()
     fps = 0
     
+    # Flag to track if we've already shown color warning
+    color_warning_shown = False
+    
     try:
         while True:
             left_frame, right_frame = stereo.capture_stereo_pair()
@@ -128,6 +131,18 @@ def main():
             if left_frame is None or right_frame is None:
                 print("✗ Failed to capture frames")
                 break
+            
+            # Check for color mode on first frame
+            if frame_count == 0 and not color_warning_shown:
+                if len(left_frame.shape) == 2:
+                    print("\n⚠⚠⚠ WARNING: CAMERAS ARE IN MONOCHROME MODE! ⚠⚠⚠")
+                    print(f"Frame shape: {left_frame.shape} (should be 3D with 3 channels)")
+                    print("Run: python scripts/diagnose_camera_format.py")
+                    print("⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠\n")
+                    color_warning_shown = True
+                elif len(left_frame.shape) == 3:
+                    print(f"\n✓ COLOR MODE ACTIVE: {left_frame.shape[2]} channels\n")
+                    color_warning_shown = True
             
             frame_count += 1
             
