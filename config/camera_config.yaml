@@ -35,6 +35,7 @@ calibration:
     rows: 9  # internal corners (vertical)
     cols: 6  # internal corners (horizontal)
     square_size_mm: 25.0  # size of each square in mm
+    square_size: 25  # deprecated: use square_size_mm instead
   
   capture:
     num_images_min: 20  # minimum images for good calibration

@@ -403,8 +403,8 @@ class StereoCameraSystem:
         # Close Peak library
         try:
             peak.Library.Close()
-        except:
-            pass
+        except Exception as e:
+            logger.warning(f"Error closing Peak library: {e}")
 
 
 def list_ids_peak_cameras() -> List[dict]:
