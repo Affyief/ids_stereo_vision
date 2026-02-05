@@ -24,7 +24,7 @@ from src.utils import (
     FPSCounter,
     save_image_with_timestamp
 )
-from src.camera_interface import create_stereo_camera
+from src.camera_interface_peak import create_stereo_camera_from_config, IDS_PEAK_AVAILABLE
 from src.stereo_processor import create_stereo_processor
 from src.depth_visualizer import DepthVisualizer
 
@@ -85,8 +85,14 @@ def main():
     project_root = get_project_root()
     
     logger.info("=" * 60)
-    logger.info("IDS Stereo Vision System")
+    logger.info("IDS Peak Stereo Vision System")
     logger.info("=" * 60 + "\n")
+    
+    # Check IDS Peak availability
+    if not IDS_PEAK_AVAILABLE:
+        logger.error("❌ IDS Peak SDK not available!")
+        logger.error("Please install from: https://en.ids-imaging.com/downloads.html")
+        return 1
     
     # Load configurations
     logger.info("Loading configurations...")
@@ -117,10 +123,23 @@ def main():
     
     # Initialize cameras
     logger.info("Initializing cameras...")
-    stereo_camera = create_stereo_camera(camera_config)
+    stereo_camera = create_stereo_camera_from_config(camera_config)
     
-    if not stereo_camera.open():
-        logger.error("Failed to open cameras!")
+    # Get parameters from config
+    width = camera_config['cameras']['resolution']['width']
+    height = camera_config['cameras']['resolution']['height']
+    exposure_us = camera_config['cameras'].get('exposure_us')
+    gain = camera_config['cameras'].get('gain')
+    pixel_format = camera_config['cameras'].get('pixel_format', 'BGR8')
+    
+    if not stereo_camera.initialize(
+        width=width,
+        height=height,
+        exposure_us=exposure_us,
+        gain=gain,
+        pixel_format=pixel_format
+    ):
+        logger.error("Failed to initialize cameras!")
         return 1
     
     logger.info("✓ Cameras initialized\n")
@@ -152,7 +171,7 @@ def main():
         while True:
             if not paused:
                 # Capture frames
-                left_frame, right_frame = stereo_camera.capture_frames()
+                left_frame, right_frame = stereo_camera.capture_stereo_pair()
                 
                 if left_frame is None or right_frame is None:
                     logger.warning("Failed to capture frames")
@@ -275,7 +294,7 @@ def main():
     finally:
         # Cleanup
         logger.info("\nCleaning up...")
-        stereo_camera.close()
+        stereo_camera.release()
         if not args.no_display:
             cv2.destroyAllWindows()
         logger.info("✓ Cleanup complete")

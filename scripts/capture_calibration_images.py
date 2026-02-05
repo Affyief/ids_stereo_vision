@@ -17,7 +17,7 @@ import cv2
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.utils import setup_logging, load_config, get_project_root
-from src.camera_interface import create_stereo_camera
+from src.camera_interface_peak import create_stereo_camera_from_config, IDS_PEAK_AVAILABLE
 
 
 def main():
@@ -66,9 +66,15 @@ def main():
     os.makedirs(left_output, exist_ok=True)
     os.makedirs(right_output, exist_ok=True)
     
+    # Check IDS Peak availability
+    if not IDS_PEAK_AVAILABLE:
+        logger.error("❌ IDS Peak SDK not available!")
+        logger.error("Please install from: https://en.ids-imaging.com/downloads.html")
+        return 1
+    
     # Get number of images to capture
-    num_images = args.num_images or config['calibration']['capture']['num_images']
-    delay = config['calibration']['capture']['delay']
+    num_images = args.num_images or config['calibration'].get('num_images', 20)
+    delay = config['calibration'].get('delay_seconds', 1.0)
     
     logger.info("=" * 60)
     logger.info("Stereo Camera Calibration Image Capture")
@@ -94,10 +100,23 @@ def main():
     
     # Initialize stereo camera
     logger.info("Initializing cameras...")
-    stereo_camera = create_stereo_camera(config)
+    stereo_camera = create_stereo_camera_from_config(config)
     
-    if not stereo_camera.open():
-        logger.error("Failed to open cameras")
+    # Get parameters from config
+    width = config['cameras']['resolution']['width']
+    height = config['cameras']['resolution']['height']
+    exposure_us = config['cameras'].get('exposure_us')
+    gain = config['cameras'].get('gain')
+    pixel_format = config['cameras'].get('pixel_format', 'BGR8')
+    
+    if not stereo_camera.initialize(
+        width=width,
+        height=height,
+        exposure_us=exposure_us,
+        gain=gain,
+        pixel_format=pixel_format
+    ):
+        logger.error("Failed to initialize cameras")
         return 1
     
     logger.info("Cameras initialized successfully\n")
@@ -112,7 +131,7 @@ def main():
     try:
         while captured_count < num_images:
             # Capture frames
-            left_frame, right_frame = stereo_camera.capture_frames()
+            left_frame, right_frame = stereo_camera.capture_stereo_pair()
             
             if left_frame is None or right_frame is None:
                 logger.error("Failed to capture frames")
@@ -187,7 +206,7 @@ def main():
     
     finally:
         # Cleanup
-        stereo_camera.close()
+        stereo_camera.release()
         cv2.destroyAllWindows()
     
     logger.info("\n" + "=" * 60)

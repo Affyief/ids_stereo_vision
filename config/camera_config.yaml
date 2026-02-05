@@ -1,30 +1,45 @@
+# IDS Peak Camera Configuration
 cameras:
-  resolution:
-    width: 2592
-    height: 1944
-  # Can be reduced for better performance:
-  # width: 1296
-  # height: 972
-  
-  framerate: 30
-  exposure: auto  # or specific value in microseconds
-  gain: 1.0
-  pixel_format: "BGR8"  # or "MONO8" for grayscale
+  # Primary method: use serial numbers (recommended)
+  # Get serial numbers from: python scripts/list_cameras.py
+  use_serial_numbers: true
   
   left_camera:
-    device_id: 0  # or serial number
+    serial_number: "4103123456"  # UPDATE: Run list_cameras.py to get actual serial
+    device_index: 0  # Fallback if serial not found
     name: "Left Camera"
   
   right_camera:
-    device_id: 1  # or serial number
+    serial_number: "4103123457"  # UPDATE: Run list_cameras.py to get actual serial
+    device_index: 1  # Fallback if serial not found
     name: "Right Camera"
+  
+  # Image settings
+  resolution:
+    width: 2592  # Full resolution
+    height: 1944
+    # Reduce for better performance:
+    # width: 1296
+    # height: 972
+  
+  framerate: 30
+  
+  # Exposure in microseconds (IDS Peak uses microseconds, NOT milliseconds)
+  # auto = automatic exposure, or specify value (e.g., 10000 = 10ms)
+  exposure_us: 10000  # 10ms
+  
+  # Gain (0.0 - max depends on camera, typically 0-24 dB)
+  gain: 1.0
+  
+  # Pixel format: BGR8, RGB8, Mono8, etc.
+  # BGR8 recommended for OpenCV compatibility
+  pixel_format: "BGR8"
 
 calibration:
   checkerboard:
-    rows: 9
+    rows: 9  # Internal corners (not squares!)
     cols: 6
-    square_size: 25  # millimeters
+    square_size_mm: 25.0  # millimeters - measure your checkerboard
   
-  capture:
-    num_images: 20  # minimum for good calibration
-    delay: 1.0  # seconds between captures
+  num_images: 20  # Minimum calibration images, 30+ recommended
+  delay_seconds: 1.0  # Seconds between captures

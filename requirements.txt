@@ -1,7 +1,22 @@
+# IDS Peak Python bindings (install from IDS website)
+# Download from: https://en.ids-imaging.com/downloads.html
+# Install with: pip install /opt/ids/peak/lib/python*/ids_peak-*.whl
+# ids-peak>=2.0.0
+# ids-peak-ipl>=2.0.0
+
+# Computer vision
 numpy>=1.21.0
 opencv-python>=4.5.0
 opencv-contrib-python>=4.5.0
-PyYAML>=5.4
-matplotlib>=3.3.0
-pyueye>=4.95.0  # IDS camera SDK (optional, may need manual installation)
+
+# Configuration
+PyYAML>=6.0
+
+# Visualization
+matplotlib>=3.5.0
+
+# Utilities
 tqdm>=4.60.0
+
+# Optional: point cloud visualization
+# open3d>=0.15.0
