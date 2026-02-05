@@ -14,6 +14,8 @@ from src.camera_interface import list_ids_peak_cameras, StereoCameraSystem
 from src.utils import load_config
 import logging
 import cv2
+import numpy as np
+import time
 
 # Setup logging
 logging.basicConfig(
@@ -92,9 +94,12 @@ def main():
     
     # Test capture
     print("\n4. Testing frame capture...")
-    print("   Press 'Q' to quit, 'S' to save test images")
+    print("   Press 'Q' or 'ESC' to quit, 'S' to save test images")
     
     frame_count = 0
+    start_time = time.time()
+    fps = 0
+    
     try:
         while True:
             left_frame, right_frame = stereo.capture_stereo_pair()
@@ -105,13 +110,60 @@ def main():
             
             frame_count += 1
             
-            # Display
-            cv2.imshow("Left Camera", left_frame)
-            cv2.imshow("Right Camera", right_frame)
+            # Calculate FPS
+            elapsed_time = time.time() - start_time
+            if elapsed_time > 0:
+                fps = frame_count / elapsed_time
+            
+            # Resize frames for display (800px width each)
+            display_width = 800
+            scale = display_width / left_frame.shape[1]
+            display_height = int(left_frame.shape[0] * scale)
+            
+            left_display = cv2.resize(left_frame, (display_width, display_height))
+            right_display = cv2.resize(right_frame, (display_width, display_height))
+            
+            # Add text labels
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            font_scale = 0.7
+            font_thickness = 2
+            text_color = (0, 255, 0)  # Green
+            
+            # Left camera labels
+            cv2.putText(left_display, "Left Camera", (10, 30), 
+                       font, font_scale, text_color, font_thickness)
+            cv2.putText(left_display, f"S/N: {info['left'].get('serial')}", (10, 60), 
+                       font, font_scale * 0.6, text_color, font_thickness - 1)
+            
+            # Right camera labels
+            cv2.putText(right_display, "Right Camera", (10, 30), 
+                       font, font_scale, text_color, font_thickness)
+            cv2.putText(right_display, f"S/N: {info['right'].get('serial')}", (10, 60), 
+                       font, font_scale * 0.6, text_color, font_thickness - 1)
+            
+            # Add FPS counter and instructions at bottom
+            fps_text = f"FPS: {fps:.1f}"
+            instructions = "Press 'Q' or 'ESC' to quit | 'S' to save"
+            
+            cv2.putText(left_display, instructions, (10, display_height - 20), 
+                       font, 0.5, text_color, 1)
+            cv2.putText(right_display, fps_text, (display_width - 120, display_height - 20), 
+                       font, 0.5, text_color, 1)
+            
+            # Concatenate horizontally
+            stereo_view = np.hstack([left_display, right_display])
+            
+            # Add separator line between cameras
+            separator_x = display_width
+            cv2.line(stereo_view, (separator_x, 0), (separator_x, display_height), 
+                    (255, 255, 255), 2)
+            
+            # Display in single window
+            cv2.imshow("Stereo Camera View - Left | Right", stereo_view)
             
             key = cv2.waitKey(1) & 0xFF
             
-            if key == ord('q'):
+            if key == ord('q') or key == 27:  # 'q' or ESC
                 print(f"\n✓ Captured {frame_count} frames successfully")
                 break
             elif key == ord('s'):
