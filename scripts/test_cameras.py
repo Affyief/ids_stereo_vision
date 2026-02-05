@@ -134,7 +134,7 @@ def main():
             
             # Check for color mode on first frame
             if frame_count == 0 and not color_warning_shown:
-                channels = left_frame.shape[2] if left_frame.ndim == 3 else 1
+                channels = left_frame.shape[2] if left_frame.ndim >= 3 and len(left_frame.shape) > 2 else 1
                 print(f"\n✓ Color Detection:")
                 print(f"  Camera format: {pixel_format}")
                 if pixel_format.startswith('Bayer'):

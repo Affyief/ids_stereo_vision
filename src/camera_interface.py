@@ -171,6 +171,8 @@ class IDSPeakCamera:
             logger.info(f"Available pixel formats: {sorted(available_formats)}")
             
             # Map requested format to available Bayer format
+            # Note: IDS U3-3680XCP-C uses BayerGR pattern. If using a different camera
+            # with a different Bayer pattern, update this mapping accordingly.
             format_map = {
                 'BGR8': 'BayerGR8',
                 'RGB8': 'BayerGR8',
@@ -375,7 +377,9 @@ class IDSPeakCamera:
                     if conversion_code is None:
                         # Default to BayerGR if specific pattern not found
                         conversion_code = cv2.COLOR_BayerGR2BGR
-                        logger.warning(f"Unknown Bayer pattern {format_name}, using BayerGR2BGR")
+                        logger.warning(f"Unknown Bayer pattern {format_name}. Defaulting to BayerGR2BGR, "
+                                     f"but colors may be incorrect. Please verify the camera's actual Bayer "
+                                     f"pattern and update the format mapping if needed.")
                     
                     # Convert Bayer to BGR
                     numpy_image = cv2.cvtColor(numpy_image, conversion_code)
