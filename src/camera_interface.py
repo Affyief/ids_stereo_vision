@@ -34,7 +34,7 @@ class IDSPeakCamera:
         
     def initialize(self, width: int = 2592, height: int = 1944, 
                    exposure_us: float = 10000, gain_db: float = 0.0,
-                   framerate: float = 30.0) -> bool:
+                   framerate: float = 30.0, pixel_format: str = "BGR8") -> bool:
         """
         Initialize IDS Peak camera with GenICam parameters
         
@@ -44,6 +44,7 @@ class IDSPeakCamera:
             exposure_us: Exposure time in microseconds
             gain_db: Gain in dB
             framerate: Target frame rate in fps
+            pixel_format: Pixel format ("BGR8", "RGB8", "BayerRG8", or "Mono8")
         """
         
         if not IDS_PEAK_AVAILABLE:
@@ -97,7 +98,7 @@ class IDSPeakCamera:
             self.nodemap_remote_device = self.device.RemoteDevice().NodeMaps()[0]
             
             # Configure camera
-            self._configure_camera(width, height, exposure_us, gain_db, framerate)
+            self._configure_camera(width, height, exposure_us, gain_db, framerate, pixel_format)
             
             # Setup data stream
             self._setup_datastream()
@@ -115,22 +116,37 @@ class IDSPeakCamera:
             return False
     
     def _configure_camera(self, width: int, height: int, exposure_us: float, 
-                          gain_db: float, framerate: float):
+                          gain_db: float, framerate: float, pixel_format: str = "BGR8"):
         """Configure camera parameters via GenICam nodemap"""
         
         nm = self.nodemap_remote_device
         
-        # Set pixel format to BGR8 for color (or Mono8 for grayscale)
+        # Set pixel format
         try:
             pixel_format_node = nm.FindNode("PixelFormat")
             pixel_format_entries = pixel_format_node.Entries()
             
-            # Try BGR8 first (color), fall back to BayerRG8, then Mono8
-            for preferred_format in ["BGR8", "BayerRG8", "BayerBG8", "Mono8"]:
-                for entry in pixel_format_entries:
-                    if entry.SymbolicValue() == preferred_format:
-                        pixel_format_node.SetCurrentEntry(entry)
-                        logger.info(f"Set pixel format: {preferred_format}")
+            # Try requested format first, then fall back to alternatives
+            format_found = False
+            for entry in pixel_format_entries:
+                if entry.SymbolicValue() == pixel_format:
+                    pixel_format_node.SetCurrentEntry(entry)
+                    logger.info(f"Set pixel format: {pixel_format}")
+                    format_found = True
+                    break
+            
+            # If requested format not found, try fallback options
+            if not format_found:
+                logger.warning(f"Requested format '{pixel_format}' not available, trying fallbacks...")
+                fallback_formats = ["BGR8", "BayerRG8", "BayerBG8", "Mono8"]
+                for fallback in fallback_formats:
+                    for entry in pixel_format_entries:
+                        if entry.SymbolicValue() == fallback:
+                            pixel_format_node.SetCurrentEntry(entry)
+                            logger.info(f"Set pixel format (fallback): {fallback}")
+                            format_found = True
+                            break
+                    if format_found:
                         break
         except Exception as e:
             logger.warning(f"Could not set pixel format: {e}")
@@ -344,7 +360,7 @@ class StereoCameraSystem:
     
     def initialize(self, width: int = 2592, height: int = 1944,
                    exposure_us: float = 10000, gain_db: float = 0.0,
-                   framerate: float = 30.0) -> bool:
+                   framerate: float = 30.0, pixel_format: str = "BGR8") -> bool:
         """
         Initialize both cameras with identical settings
         
@@ -354,17 +370,18 @@ class StereoCameraSystem:
             exposure_us: Exposure time in microseconds
             gain_db: Gain in dB
             framerate: Target frame rate
+            pixel_format: Pixel format ("BGR8", "RGB8", "BayerRG8", or "Mono8")
         """
         
         logger.info("Initializing left camera...")
-        left_ok = self.left_camera.initialize(width, height, exposure_us, gain_db, framerate)
+        left_ok = self.left_camera.initialize(width, height, exposure_us, gain_db, framerate, pixel_format)
         
         if not left_ok:
             logger.error("Failed to initialize left camera")
             return False
         
         logger.info("Initializing right camera...")
-        right_ok = self.right_camera.initialize(width, height, exposure_us, gain_db, framerate)
+        right_ok = self.right_camera.initialize(width, height, exposure_us, gain_db, framerate, pixel_format)
         
         if not right_ok:
             logger.error("Failed to initialize right camera")
@@ -470,6 +487,9 @@ def create_stereo_camera(config: dict):
     
     gain_db = config['cameras'].get('gain_db', 0.0)
     
+    # Get pixel format with fallback to BGR8 (color)
+    pixel_format = config['cameras'].get('pixel_format', 'BGR8')
+    
     # Get camera IDs (serial or device_id)
     left_config = config['cameras']['left_camera']
     right_config = config['cameras']['right_camera']
@@ -506,7 +526,8 @@ def create_stereo_camera(config: dict):
         'height': height,
         'exposure_us': exposure_us,
         'gain_db': gain_db,
-        'framerate': framerate
+        'framerate': framerate,
+        'pixel_format': pixel_format
     }
     
     return CompatibilityStereoCamera(stereo, init_params)

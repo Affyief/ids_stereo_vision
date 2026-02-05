@@ -1,4 +1,8 @@
 cameras:
+  # Pixel format for color cameras
+  # Options: BGR8 (color, OpenCV native), RGB8 (color), BayerRG8 (raw Bayer), Mono8 (grayscale)
+  pixel_format: "BGR8"
+  
   # Resolution settings
   resolution:
     width: 2592
