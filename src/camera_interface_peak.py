@@ -225,7 +225,7 @@ class IDSPeakCamera:
             node = self.nodemap.FindNode(node_name)
             if node is not None:
                 return node.Value()
-        except:
+        except Exception:
             pass
         return default
     
@@ -359,7 +359,7 @@ class IDSPeakCamera:
             try:
                 acquisition_stop = self.nodemap.FindNode("AcquisitionStop")
                 acquisition_stop.Execute()
-            except:
+            except Exception:
                 pass
             
             # Stop datastream
@@ -367,7 +367,7 @@ class IDSPeakCamera:
                 try:
                     self.datastream.KillWait()
                     self.datastream.StopAcquisition()
-                except:
+                except Exception:
                     pass
             
             self.is_acquiring = False
@@ -492,20 +492,20 @@ class IDSPeakCamera:
                     # Revoke buffers
                     for buffer in self.datastream.AnnouncedBuffers():
                         self.datastream.RevokeBuffer(buffer)
-                except:
+                except Exception:
                     pass
             
             # Close device
             if self.device is not None:
                 try:
                     self.device = None
-                except:
+                except Exception:
                     pass
             
             # Close library
             try:
                 ids_peak.Library.Close()
-            except:
+            except Exception:
                 pass
             
             self.logger.info(f"{self.name} released")
