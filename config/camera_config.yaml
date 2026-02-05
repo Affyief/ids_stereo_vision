@@ -16,6 +16,18 @@ cameras:
   exposure_us: 10000  # microseconds (10ms)
   gain_db: 0.0  # decibels
   
+  # Lens configuration (IDS-2M12-C0620)
+  lens:
+    model: "IDS-2M12-C0620"
+    focal_length_mm: 6.0
+    f_number: 2.0
+    format: "1/2\""
+    mount: "C-mount"
+    distortion_max_percent: 3.0
+    working_distance_mm:
+      min: 100
+      max: "infinity"
+  
   # Camera identification
   # Option 1: Use device indices (0, 1, 2...)
   left_camera:
@@ -32,6 +44,25 @@ cameras:
   #   serial_number: "4103123456"
   # right_camera:
   #   serial_number: "4103123457"
+
+# Calculated optical parameters (for reference)
+# These are computed from lens + sensor specs
+optical:
+  # Focal length in pixels: f_pixels = (focal_length_mm / pixel_size_mm) × resolution
+  focal_length_pixels:
+    fx: 2727  # 6mm / 0.0022mm = 2727 pixels
+    fy: 2727
+  
+  # Principal point (image center)
+  principal_point:
+    cx: 1296  # width / 2
+    cy: 972   # height / 2
+  
+  # Field of view
+  field_of_view:
+    horizontal_deg: 50.7
+    vertical_deg: 39.2
+    diagonal_deg: 62.4
 
 # Calibration settings
 calibration:

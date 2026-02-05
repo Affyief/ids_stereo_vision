@@ -195,6 +195,149 @@ def estimate_camera_matrix(
     return camera_matrix
 
 
+def estimate_camera_matrix_from_lens(focal_length_mm, sensor_width_mm, sensor_height_mm, 
+                                     image_width_px, image_height_px, pixel_size_um=2.2):
+    """
+    Estimate camera intrinsic matrix from lens and sensor specifications.
+    
+    Args:
+        focal_length_mm: Lens focal length in millimeters
+        sensor_width_mm: Sensor width in millimeters
+        sensor_height_mm: Sensor height in millimeters
+        image_width_px: Image width in pixels
+        image_height_px: Image height in pixels
+        pixel_size_um: Pixel size in micrometers (default: 2.2 for AR0521)
+    
+    Returns:
+        camera_matrix: 3x3 camera intrinsic matrix
+        fov: dict with horizontal, vertical, and diagonal FOV in degrees
+    
+    Example:
+        For IDS U3-3680XCP-C with 6mm lens:
+        >>> matrix, fov = estimate_camera_matrix_from_lens(
+        ...     focal_length_mm=6.0,
+        ...     sensor_width_mm=5.702,
+        ...     sensor_height_mm=4.277,
+        ...     image_width_px=2592,
+        ...     image_height_px=1944,
+        ...     pixel_size_um=2.2
+        ... )
+        >>> print(f"fx={matrix[0,0]:.1f}, fy={matrix[1,1]:.1f}")
+        fx=2727.3, fy=2727.3
+        >>> print(f"Horizontal FOV: {fov['horizontal']:.1f}°")
+        Horizontal FOV: 50.7°
+    """
+    # Convert pixel size to mm
+    pixel_size_mm = pixel_size_um / 1000.0
+    
+    # Calculate focal length in pixels
+    # fx = focal_length_mm / pixel_size_mm
+    fx = focal_length_mm / pixel_size_mm
+    fy = focal_length_mm / pixel_size_mm
+    
+    # Principal point (image center)
+    cx = image_width_px / 2.0
+    cy = image_height_px / 2.0
+    
+    # Build camera matrix
+    camera_matrix = np.array([
+        [fx,  0, cx],
+        [ 0, fy, cy],
+        [ 0,  0,  1]
+    ], dtype=np.float64)
+    
+    # Calculate field of view
+    # FOV = 2 × arctan(sensor_size / (2 × focal_length))
+    fov_h_rad = 2 * np.arctan(sensor_width_mm / (2 * focal_length_mm))
+    fov_v_rad = 2 * np.arctan(sensor_height_mm / (2 * focal_length_mm))
+    fov_d_rad = 2 * np.arctan(np.sqrt(sensor_width_mm**2 + sensor_height_mm**2) / (2 * focal_length_mm))
+    
+    fov = {
+        'horizontal': np.degrees(fov_h_rad),
+        'vertical': np.degrees(fov_v_rad),
+        'diagonal': np.degrees(fov_d_rad)
+    }
+    
+    return camera_matrix, fov
+
+
+def load_lens_config(config_path='config/camera_config.yaml'):
+    """
+    Load lens configuration and compute optical parameters.
+    
+    Returns:
+        dict with lens specs and computed optical parameters
+    """
+    config = load_config(config_path)
+    
+    lens_config = config.get('cameras', {}).get('lens', {})
+    resolution = config.get('cameras', {}).get('resolution', {})
+    
+    if not lens_config:
+        return None
+    
+    focal_length_mm = lens_config.get('focal_length_mm', 6.0)
+    width_px = resolution.get('width', 2592)
+    height_px = resolution.get('height', 1944)
+    
+    # AR0521 sensor specs
+    sensor_width_mm = 5.702
+    sensor_height_mm = 4.277
+    pixel_size_um = 2.2
+    
+    camera_matrix, fov = estimate_camera_matrix_from_lens(
+        focal_length_mm=focal_length_mm,
+        sensor_width_mm=sensor_width_mm,
+        sensor_height_mm=sensor_height_mm,
+        image_width_px=width_px,
+        image_height_px=height_px,
+        pixel_size_um=pixel_size_um
+    )
+    
+    return {
+        'lens': lens_config,
+        'camera_matrix': camera_matrix,
+        'fov': fov,
+        'fx': camera_matrix[0, 0],
+        'fy': camera_matrix[1, 1],
+        'cx': camera_matrix[0, 2],
+        'cy': camera_matrix[1, 2]
+    }
+
+
+def calculate_depth_accuracy(baseline_mm, focal_length_pixels, disparity_pixels, depth_m):
+    """
+    Calculate depth measurement accuracy based on stereo geometry.
+    
+    Args:
+        baseline_mm: Distance between cameras in millimeters
+        focal_length_pixels: Focal length in pixels (fx or fy)
+        disparity_pixels: Disparity resolution (typically 1/16 pixel for OpenCV)
+        depth_m: Depth distance in meters
+    
+    Returns:
+        Depth accuracy in millimeters
+    
+    Formula:
+        ΔZ = (Z² × Δd) / (B × f)
+        where:
+        - Z = depth
+        - Δd = disparity error
+        - B = baseline
+        - f = focal length
+    """
+    depth_mm = depth_m * 1000
+    baseline_m = baseline_mm / 1000
+    
+    # OpenCV stereo has ~1/16 pixel disparity resolution
+    disparity_error = disparity_pixels
+    
+    # Depth error
+    depth_error_mm = (depth_mm ** 2 * disparity_error) / (baseline_mm * focal_length_pixels)
+    
+    return depth_error_mm
+
+
 def disparity_to_depth(
     disparity: np.ndarray,
     focal_length_pixels: float,
