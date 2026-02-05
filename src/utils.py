@@ -231,7 +231,6 @@ def estimate_camera_matrix_from_lens(focal_length_mm, sensor_width_mm, sensor_he
     pixel_size_mm = pixel_size_um / 1000.0
     
     # Calculate focal length in pixels
-    # fx = focal_length_mm / pixel_size_mm
     fx = focal_length_mm / pixel_size_mm
     fy = focal_length_mm / pixel_size_mm
     
