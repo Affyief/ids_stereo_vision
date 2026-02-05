@@ -410,6 +410,63 @@ With typical setup (60mm baseline, 8mm lens, 1296x972 resolution):
 - Ensure no other application is using cameras
 - Check camera permissions (Linux): `sudo usermod -a -G video $USER`
 
+### Cameras Showing Monochrome/Grayscale Instead of Color
+
+**Symptoms:**
+- Live view shows black and white images despite color cameras
+- Test images saved are grayscale (2D array) instead of color (3D array)
+- IDS Peak Cockpit shows color, but Python script shows monochrome
+
+**Diagnosis:**
+Run the diagnostic script to check camera pixel format support:
+```bash
+python scripts/diagnose_camera_format.py
+```
+
+This will show:
+- Available pixel formats for each camera
+- Current pixel format setting
+- Whether BGR8/RGB8 can be set successfully
+
+**Solutions:**
+
+1. **Check camera logs during initialization:**
+   ```bash
+   python scripts/test_cameras.py 2>&1 | grep -i "pixel\|format\|color\|channel"
+   ```
+   
+   You should see:
+   - `"Requesting pixel format: BGR8"`
+   - `"Available pixel formats: ['BGR8', ...]"`
+   - `"✓ Set pixel format to: BGR8"`
+   - `"✓✓✓ COLOR MODE CONFIRMED: 3 channels"`
+
+2. **If BGR8 is not available:**
+   - Try `RGB8` in `config/camera_config.yaml`
+   - Try Bayer formats (`BayerRG8`, `BayerBG8`, etc.) - these will be automatically demosaiced to BGR
+
+3. **Verify camera model:**
+   - Ensure cameras are color variants (U3-3680XCP-**C**), not mono (U3-3680XCP-M)
+   - Check with IDS Peak Cockpit that cameras show color
+
+4. **Check for SDK issues:**
+   - Ensure IDS Peak SDK is up to date
+   - Reinstall IDS Peak IPL Python bindings
+
+5. **Manual testing:**
+   ```python
+   from src.camera_interface import IDSPeakCamera
+   cam = IDSPeakCamera(device_index=0)
+   cam.initialize(pixel_format="BGR8")
+   frame = cam.capture_frame()
+   print(f"Frame shape: {frame.shape}")  # Should be (H, W, 3) for color
+   ```
+
+**Expected Behavior:**
+- Color frames should have shape `(height, width, 3)`
+- Mono frames have shape `(height, width)`
+- Log should show "COLOR MODE CONFIRMED"
+
 ### Poor Calibration Results (High Error)
 - Capture more images (30+ recommended)
 - Improve image coverage (all areas of field of view)
@@ -474,6 +531,7 @@ ids_stereo_vision/
 │
 └── scripts/                          # Executable scripts
     ├── capture_calibration_images.py # Capture calibration images
+    ├── diagnose_camera_format.py    # Diagnose pixel format issues
     ├── test_cameras.py              # Test camera connections
     └── run_stereo_vision.py         # Main application
 ```
