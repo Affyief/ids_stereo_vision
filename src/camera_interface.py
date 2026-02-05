@@ -126,28 +126,34 @@ class IDSPeakCamera:
             pixel_format_node = nm.FindNode("PixelFormat")
             pixel_format_entries = pixel_format_node.Entries()
             
-            # Try requested format first, then fall back to alternatives
-            format_found = False
-            for entry in pixel_format_entries:
-                if entry.SymbolicValue() == pixel_format:
-                    pixel_format_node.SetCurrentEntry(entry)
-                    logger.info(f"Set pixel format: {pixel_format}")
-                    format_found = True
-                    break
+            # Build a set of available formats for O(1) lookup
+            available_formats = {entry.SymbolicValue() for entry in pixel_format_entries}
             
-            # If requested format not found, try fallback options
+            # Try requested format first
+            format_found = False
+            if pixel_format in available_formats:
+                for entry in pixel_format_entries:
+                    if entry.SymbolicValue() == pixel_format:
+                        pixel_format_node.SetCurrentEntry(entry)
+                        logger.info(f"Set pixel format: {pixel_format}")
+                        format_found = True
+                        break
+            
+            # If requested format not found, try fallback options (excluding already tried format)
             if not format_found:
                 logger.warning(f"Requested format '{pixel_format}' not available, trying fallbacks...")
                 fallback_formats = ["BGR8", "BayerRG8", "BayerBG8", "Mono8"]
+                
                 for fallback in fallback_formats:
-                    for entry in pixel_format_entries:
-                        if entry.SymbolicValue() == fallback:
-                            pixel_format_node.SetCurrentEntry(entry)
-                            logger.info(f"Set pixel format (fallback): {fallback}")
-                            format_found = True
+                    if fallback != pixel_format and fallback in available_formats:
+                        for entry in pixel_format_entries:
+                            if entry.SymbolicValue() == fallback:
+                                pixel_format_node.SetCurrentEntry(entry)
+                                logger.info(f"Set pixel format (fallback): {fallback}")
+                                format_found = True
+                                break
+                        if format_found:
                             break
-                    if format_found:
-                        break
         except Exception as e:
             logger.warning(f"Could not set pixel format: {e}")
         
