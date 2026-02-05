@@ -134,15 +134,24 @@ def main():
             
             # Check for color mode on first frame
             if frame_count == 0 and not color_warning_shown:
-                if len(left_frame.shape) == 2:
+                channels = left_frame.shape[2] if left_frame.ndim >= 3 and len(left_frame.shape) > 2 else 1
+                print(f"\n✓ Color Detection:")
+                print(f"  Camera format: {pixel_format}")
+                if pixel_format.startswith('Bayer'):
+                    print(f"  Output format: BGR8 (demosaiced)")
+                else:
+                    print(f"  Output format: {pixel_format}")
+                print(f"  Frame shape: {left_frame.shape}")
+                print(f"  Channels: {channels}")
+                if channels == 3:
+                    print(f"  Status: ✓ FULL RGB COLOR")
+                elif channels == 1:
+                    print(f"  Status: ✗ MONOCHROME")
                     print("\n⚠⚠⚠ WARNING: CAMERAS ARE IN MONOCHROME MODE! ⚠⚠⚠")
                     print(f"Frame shape: {left_frame.shape} (should be 3D with 3 channels)")
                     print("Run: python scripts/diagnose_camera_format.py")
                     print("⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠\n")
-                    color_warning_shown = True
-                elif len(left_frame.shape) == 3:
-                    print(f"\n✓ COLOR MODE ACTIVE: {left_frame.shape[2]} channels\n")
-                    color_warning_shown = True
+                color_warning_shown = True
             
             frame_count += 1
             

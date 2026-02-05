@@ -6,6 +6,7 @@ Uses modern IDS Peak SDK with GenICam/GenTL
 import logging
 from typing import Tuple, Optional, List
 import numpy as np
+import cv2  # For Bayer demosaicing
 
 try:
     from ids_peak import ids_peak as peak
@@ -146,7 +147,9 @@ class IDSPeakCamera:
     
     def _configure_camera(self, width: int, height: int, exposure_us: float, 
                           gain_db: float, framerate: float, pixel_format: str = "BGR8"):
-        """Configure camera parameters via GenICam nodemap"""
+        """
+        Configure camera with Bayer format support and demosaicing
+        """
         
         nm = self.nodemap_remote_device
         
@@ -167,36 +170,49 @@ class IDSPeakCamera:
             
             logger.info(f"Available pixel formats: {sorted(available_formats)}")
             
-            # Try to set requested format
+            # Map requested format to available Bayer format
+            # Note: IDS U3-3680XCP-C uses BayerGR pattern. If using a different camera
+            # with a different Bayer pattern, update this mapping accordingly.
+            format_map = {
+                'BGR8': 'BayerGR8',
+                'RGB8': 'BayerGR8',
+                'BayerGR8': 'BayerGR8',
+                'BayerRG8': 'BayerRG8',
+                'BayerBG8': 'BayerBG8',
+                'BayerGB8': 'BayerGB8'
+            }
+            
+            # Try to set the mapped format
+            target_format = format_map.get(pixel_format, 'BayerGR8')
             format_set = False
             
             # Try exact match first
-            if pixel_format in available_formats:
+            if target_format in available_formats:
                 try:
                     for entry in pixel_format_entries:
-                        if entry.SymbolicValue() == pixel_format:
+                        if entry.SymbolicValue() == target_format:
                             pixel_format_node.SetCurrentEntry(entry)
                             current_format = pixel_format_node.CurrentEntry().SymbolicValue()
+                            self.actual_pixel_format = current_format
                             logger.info(f"✓ Set pixel format to: {current_format}")
                             format_set = True
                             break
                 except Exception as e:
-                    logger.warning(f"Failed to set {pixel_format}: {e}")
+                    logger.warning(f"Failed to set {target_format}: {e}")
             
             # Try fallbacks if requested format didn't work
             if not format_set:
-                fallback_formats = ["BGR8", "RGB8", "BayerRG8", "BayerBG8", "BayerGB8", "BayerGR8", "Mono8"]
+                # Fallback to first available Bayer format
+                fallback_formats = ['BayerGR8', 'BayerRG8', 'BayerBG8', 'BayerGB8', 'BGR8', 'RGB8', 'Mono8']
                 
                 for fallback in fallback_formats:
-                    if fallback == pixel_format:
-                        continue  # Already tried
-                        
                     if fallback in available_formats:
                         try:
                             for entry in pixel_format_entries:
                                 if entry.SymbolicValue() == fallback:
                                     pixel_format_node.SetCurrentEntry(entry)
                                     current_format = pixel_format_node.CurrentEntry().SymbolicValue()
+                                    self.actual_pixel_format = current_format
                                     logger.warning(f"Using fallback format: {current_format}")
                                     format_set = True
                                     break
@@ -215,9 +231,6 @@ class IDSPeakCamera:
             current_format = pixel_format_node.CurrentEntry().SymbolicValue()
             logger.info(f"Camera is now using pixel format: {current_format}")
             
-            # Store actual format being used
-            self.actual_pixel_format = current_format
-            
         except Exception as e:
             logger.error(f"Error configuring pixel format: {e}")
             self.actual_pixel_format = None
@@ -231,45 +244,39 @@ class IDSPeakCamera:
         except Exception as e:
             logger.warning(f"Could not set resolution: {e}")
         
-        # Set exposure time
+        # Set exposure time - use correct node name for IDS cameras
         try:
-            # Set exposure mode to manual
-            exposure_auto = nm.FindNode("ExposureAuto")
-            if exposure_auto:
-                exposure_auto.SetCurrentEntry("Off")
-            
             exposure_time_node = nm.FindNode("ExposureTime")
-            exposure_time_node.SetValue(exposure_us)
-            logger.info(f"Set exposure: {exposure_us} µs")
+            if exposure_time_node:
+                exposure_time_node.SetValue(float(exposure_us))
+                logger.info(f"Set exposure time: {exposure_us} µs")
         except Exception as e:
             logger.warning(f"Could not set exposure: {e}")
         
-        # Set gain
+        # Set gain - use correct node name for IDS cameras
         try:
-            # Set gain mode to manual
-            gain_auto = nm.FindNode("GainAuto")
-            if gain_auto:
-                gain_auto.SetCurrentEntry("Off")
-            
             gain_node = nm.FindNode("Gain")
-            gain_node.SetValue(gain_db)
-            logger.info(f"Set gain: {gain_db} dB")
+            if gain_node:
+                gain_node.SetValue(float(gain_db))
+                logger.info(f"Set gain: {gain_db} dB")
         except Exception as e:
             logger.warning(f"Could not set gain: {e}")
         
-        # Set frame rate
+        # Set frame rate - use correct node names for IDS cameras
         try:
-            # Enable frame rate control
-            fps_enable = nm.FindNode("AcquisitionFrameRateEnable")
-            if fps_enable:
-                fps_enable.SetValue(True)
+            # First check if frame rate control exists
+            frame_rate_enable_node = nm.FindNode("AcquisitionFrameRateEnable")
+            if frame_rate_enable_node:
+                frame_rate_enable_node.SetValue(True)
             
-            fps_node = nm.FindNode("AcquisitionFrameRate")
-            if fps_node:
-                fps_node.SetValue(framerate)
+            frame_rate_node = nm.FindNode("AcquisitionFrameRate")
+            if frame_rate_node:
+                frame_rate_node.SetValue(float(framerate))
                 logger.info(f"Set frame rate: {framerate} fps")
         except Exception as e:
             logger.warning(f"Could not set frame rate: {e}")
+        
+        return True
     
     def _setup_datastream(self):
         """Setup data stream and allocate buffers"""
@@ -309,13 +316,13 @@ class IDSPeakCamera:
     
     def capture_frame(self, timeout_ms: int = 5000) -> Optional[np.ndarray]:
         """
-        Capture a single frame
+        Capture a single frame and convert Bayer to BGR
         
         Args:
             timeout_ms: Timeout in milliseconds
             
         Returns:
-            numpy array with image data (BGR8, RGB8, or Mono8) or None if failed
+            numpy array with image data (BGR8 for color, demosaiced from Bayer) or None if failed
         """
         
         if not self.datastream:
@@ -337,42 +344,46 @@ class IDSPeakCamera:
             
             # Check pixel format
             ipl_format = ipl_image.PixelFormat()
-            logger.debug(f"Buffer pixel format: {ipl_format.Name()}")
+            format_name = ipl_format.Name()
+            logger.debug(f"Buffer pixel format: {format_name}")
             
             # Convert to numpy based on format
             if ipl_format.NumChannels() == 3:
-                # Color image (BGR8, RGB8)
+                # Color image (BGR8, RGB8) - already in color
                 numpy_image = ipl_image.get_numpy_3D()
                 logger.debug(f"Captured COLOR frame: {numpy_image.shape}")
                 
             elif ipl_format.NumChannels() == 1:
                 # Check if it's Bayer (needs demosaicing)
-                format_name = ipl_format.Name()
-                
                 if "Bayer" in format_name:
-                    # Demosaic Bayer to BGR
-                    logger.debug(f"Demosaicing Bayer pattern: {format_name}")
+                    # Get raw Bayer data as 2D array
+                    numpy_image = ipl_image.get_numpy_2D()
                     
-                    try:
-                        # Convert Bayer to BGR8 using IPL converter
-                        converter = ipl.ImageConverter()
-                        
-                        # Create target format
-                        target_format = ipl.PixelFormatName_BGR8
-                        
-                        # Convert
-                        converted_image = converter.Convert(ipl_image, target_format)
-                        numpy_image = converted_image.get_numpy_3D()
-                        
-                        logger.info(f"Demosaiced Bayer to BGR: {numpy_image.shape}")
-                        
-                    except Exception as e:
-                        logger.error(f"Failed to demosaic Bayer: {e}")
-                        # Fallback to grayscale
-                        numpy_image = ipl_image.get_numpy_1D().reshape(
-                            (ipl_image.Height(), ipl_image.Width())
-                        )
-                        logger.warning(f"Using raw Bayer as MONO: {numpy_image.shape}")
+                    # Demosaic Bayer to BGR using OpenCV
+                    bayer_patterns = {
+                        'BayerGR8': cv2.COLOR_BayerGR2BGR,
+                        'BayerRG8': cv2.COLOR_BayerRG2BGR,
+                        'BayerBG8': cv2.COLOR_BayerBG2BGR,
+                        'BayerGB8': cv2.COLOR_BayerGB2BGR
+                    }
+                    
+                    # Find the matching conversion code
+                    conversion_code = None
+                    for pattern_name, code in bayer_patterns.items():
+                        if pattern_name in format_name:
+                            conversion_code = code
+                            break
+                    
+                    if conversion_code is None:
+                        # Default to BayerGR if specific pattern not found
+                        conversion_code = cv2.COLOR_BayerGR2BGR
+                        logger.warning(f"Unknown Bayer pattern {format_name}. Defaulting to BayerGR2BGR, "
+                                     f"but colors may be incorrect. Please verify the camera's actual Bayer "
+                                     f"pattern and update the format mapping if needed.")
+                    
+                    # Convert Bayer to BGR
+                    numpy_image = cv2.cvtColor(numpy_image, conversion_code)
+                    logger.debug(f"Demosaiced {format_name} to BGR: {numpy_image.shape}")
                     
                 else:
                     # True monochrome
