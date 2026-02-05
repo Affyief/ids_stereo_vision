@@ -208,7 +208,7 @@ def main():
         config['calibration']['checkerboard']['rows'],
         config['calibration']['checkerboard']['cols']
     )
-    square_size_mm = config['calibration']['checkerboard']['square_size']
+    square_size_mm = config['calibration']['checkerboard'].get('square_size_mm') or config['calibration']['checkerboard'].get('square_size', 25.0)
     
     # Determine images directory
     if args.images_dir:

@@ -1,231 +1,253 @@
-# IDS Stereo Vision System
+# IDS Peak Stereo Vision System
 
-A complete stereo vision system for IDS U3-3680XCP-C cameras that captures synchronized stereo images, computes depth maps, and displays real-time distance measurements.
+A complete, production-ready stereo vision system for IDS U3-3680XCP-C cameras using the modern **IDS Peak SDK** (GenICam/GenTL interface). Features real-time depth computation, interactive distance measurements, and comprehensive calibration tools.
 
-## Features
+## 🎯 Key Features
 
-- **Dual Camera Support**: Interface with two IDS U3-3680XCP-C cameras via PyuEye SDK or OpenCV fallback
-- **Camera Calibration**: Complete calibration pipeline for intrinsic and extrinsic parameters
-- **Stereo Matching**: High-quality depth computation using SGBM (Semi-Global Block Matching)
-- **Real-time Visualization**: Live depth maps with color-coded distance overlays
-- **Interactive Measurements**: Click-to-measure distance at any point in the scene
-- **Configurable Parameters**: YAML-based configuration for easy customization
-- **Post-processing**: WLS filtering for disparity refinement and noise reduction
+- **Modern IDS Peak SDK**: Uses GenICam interface (NOT legacy PyuEye)
+- **Serial Number Identification**: Reliable camera identification in multi-camera setups
+- **Real-time Depth Mapping**: Live stereo matching with SGBM algorithm
+- **Interactive Visualization**: Click-to-measure distances, color-coded depth maps
+- **Complete Calibration Pipeline**: Automated tools for intrinsic and extrinsic calibration
+- **Post-processing**: WLS filtering for high-quality depth maps
+- **Production Ready**: Clean, modern Python code with proper error handling
 
-## Hardware Requirements
+## 📷 Hardware Requirements
 
 ### Cameras
-- **Model**: IDS U3-3680XCP-C-HQ (or compatible)
-- **Sensor**: ON Semiconductor AR0521 CMOS
-- **Resolution**: 2592 x 1944 pixels (5.04 MP)
-- **Sensor Size**: 5.702 mm x 4.277 mm (1/2.5" format)
-- **Pixel Size**: 2.2 µm x 2.2 µm
-- **Interface**: USB 3.0
-- **Lens Mount**: C-mount
-- **Frame Rate**: Up to 48-49 fps at full resolution
+**IDS uEye U3-3680XCP-C-HQ:**
+- Sensor: ON Semiconductor AR0521 CMOS
+- Resolution: 2592 × 1944 pixels (5.04 MP)
+- Sensor size: 5.702 × 4.277 mm (1/2.5" format)
+- Pixel size: 2.2 × 2.2 µm
+- Frame rate: Up to 48-49 fps at full resolution
+- Interface: USB 3.0 (USB3 Vision, GenICam compliant)
+- Lens mount: C-mount
 
 ### Additional Hardware
-- C-mount lenses (6mm, 8mm, or 12mm recommended)
-- Sturdy mounting bracket for both cameras
-- USB 3.0 host controller (one per camera recommended)
-- Checkerboard pattern for calibration (e.g., 9x6 with 25mm squares)
+- 2× C-mount lenses (6mm, 8mm, or 12mm recommended)
+- Rigid stereo mounting bracket
+- USB 3.0 host controllers (one per camera recommended for best performance)
+- Checkerboard calibration pattern (9×6 with 25mm squares recommended)
 
-## Software Requirements
-
-### Operating System
-- Linux (Ubuntu 20.04+ recommended)
-- Windows 10/11
-- macOS
-
-### Dependencies
+### Computer Requirements
+- USB 3.0 ports (2 available)
+- Linux (Ubuntu 20.04+) or Windows 10/11
 - Python 3.7+
-- OpenCV 4.5+ with contrib modules
-- NumPy
-- PyYAML
-- PyuEye SDK (optional, for IDS cameras)
+- 8GB+ RAM recommended
 
-## Installation
+## 💿 Installation
 
-### 1. Clone the Repository
+### 1. Install IDS Peak SDK
+
+#### Linux (Ubuntu/Debian)
+
 ```bash
-git clone https://github.com/Affyief/ids_stereo_vision.git
-cd ids_stereo_vision
+# Download IDS peak from https://en.ids-imaging.com/downloads.html
+# Select: IDS peak -> Linux -> IDS peak 2.x
+
+# Install the package
+sudo dpkg -i ids-peak_*.deb
+
+# Verify installation
+/opt/ids/peak/bin/ids-peak-cockpit
+
+# Set up camera permissions (required for non-root access)
+sudo usermod -a -G video $USER
+# Log out and back in for permissions to take effect
+
+# Install Python bindings
+pip install /opt/ids/peak/lib/python*/ids_peak-*.whl
+pip install /opt/ids/peak/lib/python*/ids_peak_ipl-*.whl
 ```
 
-### 2. Install Python Dependencies
+**Note**: The Python bindings path may vary. Check your installation directory:
 ```bash
-pip install -r requirements.txt
-```
-
-### 3. Install IDS SDK (Optional but Recommended)
-
-#### Linux
-```bash
-# Download IDS Software Suite from:
-# https://en.ids-imaging.com/downloads.html
-
-# Extract and install
-tar -xzf ids-software-suite-linux-*.tgz
-cd ids-software-suite-linux-*/
-sudo ./ids-software-suite-linux-*.run
+ls /opt/ids/peak/lib/
 ```
 
 #### Windows
-1. Download IDS Software Suite from https://en.ids-imaging.com/downloads.html
-2. Run the installer
-3. Follow installation wizard
 
-#### Install PyuEye Python Bindings
-```bash
-pip install pyueye
+1. Download IDS peak installer from [https://en.ids-imaging.com/downloads.html](https://en.ids-imaging.com/downloads.html)
+2. Run the installer (administrator rights required)
+3. Follow installation wizard
+4. Python bindings are usually installed automatically
+5. Verify installation by opening IDS peak Cockpit
+
+If Python bindings not installed:
+```powershell
+# Find IDS peak installation directory (usually C:\Program Files\IDS\peak)
+pip install "C:\Program Files\IDS\peak\lib\python*\ids_peak-*.whl"
+pip install "C:\Program Files\IDS\peak\lib\python*\ids_peak_ipl-*.whl"
 ```
 
-**Note**: If PyuEye is not available, the system will automatically fall back to OpenCV's VideoCapture interface.
+### 2. Clone Repository and Install Dependencies
 
-## Quick Start
+```bash
+# Clone repository
+git clone https://github.com/Affyief/ids_stereo_vision.git
+cd ids_stereo_vision
 
-### 1. Test Camera Connections
+# Create virtual environment (recommended)
+python -m venv venv
+
+# Activate virtual environment
+# Linux/Mac:
+source venv/bin/activate
+# Windows:
+venv\Scripts\activate
+
+# Install dependencies
+pip install -r requirements.txt
+```
+
+### 3. Verify Installation
+
+```bash
+# List detected cameras
+python scripts/list_cameras.py
+
+# Test camera connections
+python scripts/test_cameras.py
+```
+
+If cameras are detected, you're ready to proceed! 🎉
+
+## 🚀 Quick Start
+
+### Step 1: Detect Cameras
+
+```bash
+python scripts/list_cameras.py
+```
+
+This will show all connected IDS Peak cameras with their serial numbers. Example output:
+```
+✓ Found 2 IDS Peak camera(s):
+
+Camera 0:
+  Model:      UI-3680CP Rev.1.2
+  Serial:     4103123456
+  Interface:  U3V
+  Status:     ✓ Available
+  Test:       ✓ Capture successful
+
+Camera 1:
+  Model:      UI-3680CP Rev.1.2
+  Serial:     4103654321
+  Interface:  U3V
+  Status:     ✓ Available
+  Test:       ✓ Capture successful
+```
+
+### Step 2: Configure Cameras
+
+Edit `config/camera_config.yaml` with your camera serial numbers:
+
+```yaml
+cameras:
+  use_serial_numbers: true
+  
+  left_camera:
+    serial_number: "4103123456"  # Copy from list_cameras.py output
+    device_index: 0
+  
+  right_camera:
+    serial_number: "4103654321"  # Copy from list_cameras.py output
+    device_index: 1
+  
+  resolution:
+    width: 2592
+    height: 1944
+  
+  exposure_us: 10000  # 10ms (Peak uses microseconds!)
+  gain: 1.0
+```
+
+**Important**: IDS Peak uses **microseconds** for exposure (not milliseconds like PyuEye).
+
+### Step 3: Measure Baseline
+
+Measure the distance between the optical centers of your two cameras in millimeters. Update `config/stereo_config.yaml`:
+
+```yaml
+stereo:
+  baseline_mm: 65.0  # CHANGE THIS to your actual measurement
+```
+
+This is critical for accurate depth measurements!
+
+### Step 4: Test Cameras
+
 ```bash
 python scripts/test_cameras.py
 ```
 
-This will:
-- Verify both cameras are accessible
-- Display live feeds from both cameras
-- Show FPS performance
-- Save test images (press 's')
+This verifies both cameras can capture synchronized frames. Press 'q' to quit, 's' to save test images.
 
-### 2. Capture Calibration Images
+### Step 5: Capture Calibration Images
+
 ```bash
 python scripts/capture_calibration_images.py
 ```
 
-Instructions:
-1. Print a checkerboard pattern (default: 9x6, 25mm squares)
-2. Mount the checkerboard on a flat surface
-3. Position it in front of both cameras
-4. Press SPACE to capture images (capture at least 20 pairs)
-5. Move checkerboard to different positions and angles
-6. Cover the entire field of view
+**Calibration Instructions:**
+1. Print a checkerboard pattern (9×6 internal corners, 25mm squares)
+2. Mount it on a flat, rigid surface
+3. Position it in view of both cameras
+4. Press **SPACE** to capture when checkerboard is detected
+5. Move checkerboard to different positions, angles, and distances
+6. Capture **at least 20 pairs** (30+ recommended)
+7. Cover entire field of view including corners
+8. Press 'q' when done
 
-**Tips for Good Calibration:**
-- Include images at various depths (near and far)
-- Tilt the checkerboard at different angles
-- Cover corners and edges of the field of view
-- Ensure good lighting and sharp focus
-- Verify checkerboard is visible in BOTH cameras
+**Tips:**
+- Ensure good lighting
+- Keep checkerboard sharp (no motion blur)
+- Vary distance: near (30cm), medium (1m), far (2m+)
+- Vary angles: tilted left/right, up/down
+- Cover all areas of the frame
 
-### 3. Calibrate Individual Cameras
+### Step 6: Calibrate Cameras
+
 ```bash
 # Calibrate left camera
 python calibration/calibrate_single_camera.py --camera left
 
 # Calibrate right camera
 python calibration/calibrate_single_camera.py --camera right
-```
 
-The script will:
-- Process calibration images
-- Compute intrinsic parameters (camera matrix, distortion coefficients)
-- Report reprojection error
-- Save calibration to `calibration_data/`
-
-**Good calibration**: reprojection error < 1.0 pixels
-
-### 4. Perform Stereo Calibration
-```bash
+# Perform stereo calibration
 python calibration/calibrate_stereo.py
 ```
 
-This computes:
-- Rotation matrix (R) and translation vector (T) between cameras
-- Baseline distance
-- Rectification parameters
-- Projection matrices for 3D reconstruction
+**Good calibration**: Reprojection error < 1.0 pixels
 
-### 5. Run Stereo Vision System
+If error is high:
+- Capture more images (30-40 pairs)
+- Ensure better coverage of field of view
+- Check focus and lighting
+- Verify checkerboard dimensions in config
+
+### Step 7: Run Stereo Vision System
+
 ```bash
 python scripts/run_stereo_vision.py
 ```
 
-The application will:
-- Initialize both cameras
-- Load calibration data
-- Compute depth maps in real-time
-- Display color-coded depth visualization
-- Show distance measurements
+The application will display:
+- Left and right rectified images
+- Color-coded depth map
+- Distance measurements grid
+- FPS and statistics
 
-## Configuration
-
-### Camera Configuration (`config/camera_config.yaml`)
-
-```yaml
-cameras:
-  resolution:
-    width: 2592      # Full resolution
-    height: 1944
-    # Or use reduced resolution for better performance:
-    # width: 1296
-    # height: 972
-  
-  framerate: 30
-  exposure: auto     # or value in microseconds
-  gain: 1.0
-  
-  left_camera:
-    device_id: 0     # USB camera index or serial number
-  
-  right_camera:
-    device_id: 1
-
-calibration:
-  checkerboard:
-    rows: 9          # Internal corners (not squares)
-    cols: 6
-    square_size: 25  # millimeters
-  
-  capture:
-    num_images: 20   # Minimum for good calibration
-    delay: 1.0       # Seconds between captures
-```
-
-### Stereo Configuration (`config/stereo_config.yaml`)
-
-```yaml
-stereo:
-  baseline_mm: 60.0  # MUST BE MEASURED - distance between camera centers
-  
-  algorithm: "SGBM"  # or "BM" for faster processing
-  
-  sgbm:
-    num_disparities: 128    # Must be divisible by 16
-    block_size: 11          # Odd number, 5-21
-    P1: 600
-    P2: 2400
-    uniqueness_ratio: 10
-    speckle_window_size: 100
-    speckle_range: 32
-  
-  post_process:
-    use_wls_filter: true    # Better quality, slower
-    wls_lambda: 8000
-    wls_sigma: 1.5
-    median_blur: 5
-  
-  visualization:
-    colormap: "TURBO"       # JET, TURBO, HSV, VIRIDIS, etc.
-    min_distance_m: 0.3
-    max_distance_m: 10.0
-    measurement_points: 9   # Grid of distance measurements
-```
-
-## Keyboard Controls
+## ⌨️ Keyboard Controls
 
 | Key | Action |
 |-----|--------|
 | `q` | Quit application |
 | `s` | Save current frame and depth map |
-| `c` | Cycle through colormaps |
+| `c` | Cycle through colormaps (TURBO, JET, HSV, etc.) |
 | `f` | Toggle WLS filtering |
 | `m` | Toggle measurement grid |
 | `x` | Toggle crosshair |
@@ -234,247 +256,440 @@ stereo:
 | `p` | Pause/resume |
 | `h` | Show help |
 
-## Measuring Baseline Distance
-
-The **baseline** is the distance between the optical centers of the two cameras. This is critical for accurate depth measurement.
-
-### How to Measure:
-1. Measure the distance between the centers of the two lenses
-2. Use a caliper or ruler for precision
-3. Measure in millimeters
-4. Update `baseline_mm` in `config/stereo_config.yaml`
-
-**Typical Range**: 50-120mm for desktop stereo rigs
-
-**Impact on Performance**:
-- **Larger baseline**: Better accuracy at long distances, larger minimum distance
-- **Smaller baseline**: Shorter minimum distance, reduced accuracy at far ranges
-
-## Camera Calibration Theory
-
-### Intrinsic Parameters
-Describe the camera's internal characteristics:
-- **Camera Matrix (K)**: Contains focal length (fx, fy) and principal point (cx, cy)
-- **Distortion Coefficients**: Correct for lens distortion (radial and tangential)
-
-### Extrinsic Parameters
-Describe the relationship between cameras:
-- **Rotation Matrix (R)**: 3x3 matrix describing rotation between cameras
-- **Translation Vector (T)**: 3D vector describing translation (includes baseline)
-
-### Estimated Intrinsic Parameters
-
-For IDS U3-3680XCP-C at full resolution (2592x1944):
-
-| Lens Focal Length | fx, fy (pixels) | Use Case |
-|-------------------|-----------------|----------|
-| 6mm | ~1620 | Wide field of view |
-| 8mm | ~2160 | Standard |
-| 12mm | ~3240 | Narrow, long range |
-
-**Note**: These are estimates. Actual calibration is REQUIRED for accurate depth measurement.
-
-## Depth Calculation
-
-The system uses the standard stereo vision formula:
-
-```
-Z = (f × B) / d
-
-Where:
-- Z = distance to object (depth)
-- f = focal length in pixels
-- B = baseline (distance between cameras)
-- d = disparity in pixels
-```
-
-### Distance Ranges
-
-With typical setup (60mm baseline, 8mm lens, 1296x972 resolution):
-- **Minimum distance**: ~30-50 cm
-- **Maximum accurate distance**: ~5-10 m
-- **Optimal range**: 0.5-3 m
-
-## Troubleshooting
-
-### Cameras Not Detected
-- Check USB connections (use USB 3.0 ports)
-- Verify device IDs: `ls /dev/video*` (Linux)
-- Try different USB controllers
-- Ensure no other application is using cameras
-- Check camera permissions (Linux): `sudo usermod -a -G video $USER`
-
-### Poor Calibration Results (High Error)
-- Capture more images (30+ recommended)
-- Improve image coverage (all areas of field of view)
-- Use better lighting
-- Ensure checkerboard is flat and sharp
-- Check for motion blur
-- Verify correct checkerboard dimensions in config
-
-### Low Frame Rate
-- Reduce resolution in `camera_config.yaml`
-- Disable WLS filtering
-- Reduce `num_disparities` in stereo config
-- Use "BM" algorithm instead of "SGBM"
-- Close other applications
-- Use more powerful hardware
-
-### Inaccurate Depth Measurements
-- Verify calibration quality (reprojection error < 1.0)
-- Measure and update baseline distance accurately
-- Check stereo calibration error
-- Ensure both cameras have similar exposure/brightness
-- Verify cameras are rigidly mounted (no movement)
-- Check that scene has sufficient texture
-
-### No Depth in Certain Areas
-- Increase `num_disparities` for far objects
-- Ensure adequate lighting
-- Add texture to scene (plain surfaces don't work well)
-- Check disparity range matches scene depth
-- Verify both cameras have same field of view
-
-## File Structure
+## 📁 Project Structure
 
 ```
 ids_stereo_vision/
 ├── README.md                          # This file
 ├── requirements.txt                   # Python dependencies
-├── .gitignore                        # Git ignore patterns
+├── .gitignore
 │
-├── config/                           # Configuration files
-│   ├── camera_config.yaml           # Camera settings
-│   └── stereo_config.yaml           # Stereo processing settings
+├── config/                            # Configuration files
+│   ├── camera_config.yaml            # Camera settings, serial numbers
+│   └── stereo_config.yaml            # Stereo processing parameters
 │
-├── calibration/                      # Calibration scripts
-│   ├── calibrate_single_camera.py   # Single camera calibration
-│   ├── calibrate_stereo.py          # Stereo calibration
-│   └── calibration_images/          # Captured calibration images
-│       ├── left/                    # Left camera images
-│       └── right/                   # Right camera images
+├── calibration/                       # Calibration scripts
+│   ├── calibrate_single_camera.py    # Single camera calibration
+│   ├── calibrate_stereo.py           # Stereo calibration
+│   └── calibration_images/           # Captured calibration images
+│       ├── left/                     # Left camera images
+│       └── right/                    # Right camera images
 │
-├── calibration_data/                 # Saved calibration data
-│   ├── left_camera_calibration.npz  # Left camera parameters
-│   ├── right_camera_calibration.npz # Right camera parameters
-│   └── stereo_calibration.npz       # Stereo parameters
+├── calibration_data/                  # Saved calibration data
+│   ├── left_camera_calibration.npz   # Left camera parameters
+│   ├── right_camera_calibration.npz  # Right camera parameters
+│   └── stereo_calibration.npz        # Stereo parameters (R, T, Q)
 │
-├── src/                              # Core source code
+├── src/                               # Core source code
 │   ├── __init__.py
-│   ├── camera_interface.py          # Camera communication
-│   ├── stereo_processor.py          # Stereo processing pipeline
-│   ├── depth_visualizer.py          # Visualization and overlays
-│   └── utils.py                     # Utility functions
+│   ├── camera_interface_peak.py      # IDS Peak SDK interface
+│   ├── camera_interface.py           # Legacy interface (deprecated)
+│   ├── stereo_processor.py           # Stereo matching and depth
+│   ├── depth_visualizer.py           # Visualization and overlays
+│   └── utils.py                      # Utility functions
 │
-└── scripts/                          # Executable scripts
+└── scripts/                           # Executable scripts
+    ├── list_cameras.py               # List detected cameras
+    ├── test_cameras.py               # Test camera connections
     ├── capture_calibration_images.py # Capture calibration images
-    ├── test_cameras.py              # Test camera connections
-    └── run_stereo_vision.py         # Main application
+    └── run_stereo_vision.py          # Main application
 ```
 
-## Algorithm Details
+## ⚙️ Configuration
 
-### Stereo Matching Algorithms
+### Camera Configuration (`config/camera_config.yaml`)
 
-#### StereoBM (Block Matching)
-- **Speed**: Fast (~30-60 fps)
-- **Quality**: Good for textured scenes
-- **Best for**: Real-time applications, simple scenes
+```yaml
+cameras:
+  # Serial number identification (recommended)
+  use_serial_numbers: true
+  
+  left_camera:
+    serial_number: "4103123456"  # From list_cameras.py
+    device_index: 0               # Fallback
+    name: "Left Camera"
+  
+  right_camera:
+    serial_number: "4103654321"
+    device_index: 1
+    name: "Right Camera"
+  
+  # Image settings
+  resolution:
+    width: 2592   # Full resolution
+    height: 1944
+    # For better performance:
+    # width: 1296
+    # height: 972
+  
+  framerate: 30
+  
+  # Exposure in microseconds (IDS Peak uses µs!)
+  exposure_us: 10000  # 10ms
+  
+  # Gain (0.0 to max, typically 0-24 dB)
+  gain: 1.0
+  
+  # Pixel format: BGR8, RGB8, Mono8
+  pixel_format: "BGR8"
 
-#### StereoSGBM (Semi-Global Block Matching)
-- **Speed**: Moderate (~15-30 fps)
-- **Quality**: Excellent, handles textureless regions better
-- **Best for**: High-quality depth maps, complex scenes
+calibration:
+  checkerboard:
+    rows: 9           # Internal corners
+    cols: 6
+    square_size_mm: 25.0
+  
+  num_images: 20
+  delay_seconds: 1.0
+```
 
-### Post-Processing
+### Stereo Configuration (`config/stereo_config.yaml`)
 
-#### WLS (Weighted Least Squares) Filter
-- Refines disparity map using image edges
-- Fills in holes and reduces noise
-- Improves depth map quality significantly
-- Cost: ~20-30% performance impact
+```yaml
+stereo:
+  # CRITICAL: Measure and update this!
+  baseline_mm: 65.0  # Distance between camera optical centers
+  
+  # Algorithm: "BM" (fast) or "SGBM" (better quality)
+  algorithm: "SGBM"
+  
+  # StereoSGBM parameters
+  sgbm:
+    min_disparity: 0
+    num_disparities: 128    # Must be divisible by 16
+    block_size: 11          # Odd number, 5-21
+    P1: 600                 # Smoothness penalty
+    P2: 2400                # Smoothness penalty
+    disp12_max_diff: 1
+    uniqueness_ratio: 10
+    speckle_window_size: 100
+    speckle_range: 32
+    mode: "SGBM_MODE_HH"
+  
+  # Post-processing
+  post_process:
+    use_wls_filter: true    # Better quality, ~20% slower
+    wls_lambda: 8000
+    wls_sigma: 1.5
+    median_blur_ksize: 5
+  
+  # Visualization
+  visualization:
+    colormap: "TURBO"       # TURBO, JET, HSV, VIRIDIS, etc.
+    min_distance_m: 0.3
+    max_distance_m: 10.0
+    measurement_points: 9   # Grid size
+```
 
-#### Median Blur
-- Removes salt-and-pepper noise
-- Fast and effective
-- Minimal performance impact
+## 🔧 Troubleshooting
 
-## Performance Optimization
+### Cameras Not Detected
+
+**Problem**: `list_cameras.py` shows no cameras
+
+**Solutions**:
+1. Check USB 3.0 connections (must be USB 3.0, not 2.0)
+2. Verify cameras work in IDS Peak Cockpit
+3. Linux: Check permissions
+   ```bash
+   sudo usermod -a -G video $USER
+   # Log out and back in
+   ```
+4. Try different USB ports/controllers
+5. Ensure no other application is using cameras
+
+### IDS Peak SDK Not Found
+
+**Problem**: `ImportError: No module named 'ids_peak'`
+
+**Solutions**:
+1. Verify IDS Peak installation:
+   ```bash
+   # Linux:
+   ls /opt/ids/peak/lib/python*/
+   
+   # Windows:
+   dir "C:\Program Files\IDS\peak\lib\python*"
+   ```
+
+2. Install Python bindings:
+   ```bash
+   pip install /opt/ids/peak/lib/python*/ids_peak-*.whl
+   pip install /opt/ids/peak/lib/python*/ids_peak_ipl-*.whl
+   ```
+
+3. Check Python version matches bindings (3.7, 3.8, 3.9, etc.)
+
+### Poor Calibration Results
+
+**Problem**: High reprojection error (> 1.0 pixels)
+
+**Solutions**:
+1. Capture more images (30-40 pairs)
+2. Improve coverage:
+   - Cover all areas of field of view
+   - Include corners and edges
+   - Vary distances and angles
+3. Check image quality:
+   - Ensure sharp focus
+   - Good lighting
+   - No motion blur
+4. Verify checkerboard dimensions match config
+5. Use rigid, flat checkerboard (no warping)
+
+### Low Frame Rate
+
+**Problem**: FPS < 15
+
+**Solutions**:
+1. Reduce resolution:
+   ```yaml
+   resolution:
+     width: 1296
+     height: 972
+   ```
+
+2. Disable WLS filtering:
+   ```yaml
+   use_wls_filter: false
+   ```
+
+3. Reduce disparities:
+   ```yaml
+   num_disparities: 64  # From 128
+   ```
+
+4. Use StereoBM instead of SGBM:
+   ```yaml
+   algorithm: "BM"
+   ```
+
+5. Close other applications
+6. Use faster computer
+
+### Inaccurate Depth Measurements
+
+**Problem**: Measured distances are incorrect
+
+**Solutions**:
+1. **Verify baseline measurement** - This is the most common issue!
+   - Measure center-to-center distance between lenses
+   - Update `baseline_mm` in config
+   - 1mm error = significant depth error
+
+2. Check calibration quality:
+   - Reprojection error should be < 1.0
+   - Re-calibrate if needed
+
+3. Ensure cameras are rigidly mounted:
+   - No movement between cameras
+   - Parallel alignment helps
+
+4. Verify both cameras have similar exposure/brightness
+
+5. Check scene has sufficient texture:
+   - Plain white walls don't work well
+   - Add texture or patterns
+
+### No Depth in Certain Areas
+
+**Problem**: Black areas in depth map
+
+**Solutions**:
+1. Increase disparities for far objects:
+   ```yaml
+   num_disparities: 160  # From 128
+   ```
+
+2. Ensure adequate lighting
+
+3. Add texture to plain surfaces
+
+4. Check both cameras see the area
+
+5. Objects too close or too far:
+   - Minimum distance: ~30-50 cm
+   - Maximum distance: ~5-10 m (depends on baseline)
+
+## 📊 Performance Tuning
 
 ### For Better FPS:
-1. Reduce resolution to 1296x972 or 648x486
-2. Use StereoBM instead of StereoSGBM
-3. Disable WLS filtering
-4. Reduce `num_disparities` to 64 or 96
-5. Increase `block_size` to 15 or 21
+```yaml
+resolution:
+  width: 1296
+  height: 972
+
+algorithm: "BM"  # Instead of SGBM
+
+sgbm:
+  num_disparities: 64
+  block_size: 15
+
+post_process:
+  use_wls_filter: false
+```
+**Expected**: 30-60 fps
 
 ### For Better Quality:
-1. Use full resolution (2592x1944)
-2. Use StereoSGBM algorithm
-3. Enable WLS filtering
-4. Use `num_disparities` of 128 or 160
-5. Use smaller `block_size` (5-11)
+```yaml
+resolution:
+  width: 2592
+  height: 1944
 
-## Future Improvements
+algorithm: "SGBM"
 
-- [ ] 3D point cloud generation and export (PLY format)
-- [ ] Object detection and distance measurement
-- [ ] Video recording with depth
+sgbm:
+  num_disparities: 128
+  block_size: 7
+
+post_process:
+  use_wls_filter: true
+```
+**Expected**: 10-20 fps
+
+### Balanced:
+```yaml
+resolution:
+  width: 1296
+  height: 972
+
+algorithm: "SGBM"
+
+sgbm:
+  num_disparities: 96
+  block_size: 11
+
+post_process:
+  use_wls_filter: true
+```
+**Expected**: 15-25 fps
+
+## 📐 Understanding Stereo Vision
+
+### Depth Calculation
+
+Stereo vision uses triangulation to calculate depth:
+
+```
+Z = (f × B) / d
+
+Where:
+  Z = distance to object (depth)
+  f = focal length in pixels
+  B = baseline (distance between cameras)
+  d = disparity in pixels
+```
+
+**Key Insights**:
+- Larger baseline → Better accuracy at long distances
+- Smaller baseline → Shorter minimum distance
+- Longer focal length → Better depth resolution
+- More disparities → Larger depth range
+
+### Typical Distance Ranges
+
+With 65mm baseline, 8mm lens, 1296×972 resolution:
+
+| Distance | Accuracy |
+|----------|----------|
+| 0.3-0.5m | Poor (minimum range) |
+| 0.5-2.0m | Excellent |
+| 2.0-5.0m | Good |
+| 5.0-10m  | Fair |
+| 10m+     | Poor |
+
+### Calibration Theory
+
+**Intrinsic Parameters** (camera internal):
+- Camera matrix (K): focal length (fx, fy), principal point (cx, cy)
+- Distortion coefficients: lens distortion correction
+
+**Extrinsic Parameters** (camera relationships):
+- Rotation matrix (R): 3×3 rotation between cameras
+- Translation vector (T): 3D translation (includes baseline)
+- Essential matrix (E): combines R and T
+- Fundamental matrix (F): relates image points
+
+**Rectification**:
+- Aligns image planes so corresponding points have same y-coordinate
+- Simplifies stereo matching (search along horizontal lines only)
+- Uses R1, R2, P1, P2, Q matrices
+
+## 🔒 Important Notes
+
+### Exposure Units
+⚠️ **IDS Peak uses MICROSECONDS** for exposure, not milliseconds!
+- 1000 µs = 1 ms
+- 10000 µs = 10 ms (typical value)
+- Do NOT confuse with PyuEye which used milliseconds
+
+### Serial Numbers vs Device Index
+- **Serial numbers** are preferred (reliable, consistent)
+- **Device index** works but may change if USB enumeration changes
+- Always use serial numbers in production systems
+
+### Camera Synchronization
+- Current implementation: software-triggered sequential capture
+- For true hardware sync: Use GPIO trigger on both cameras (future enhancement)
+- Sequential capture works well for most applications (< 1ms difference)
+
+### Baseline Measurement
+- Measure center-to-center distance between lenses
+- Use calipers for precision
+- Critical for accurate depth - measure carefully!
+
+## 🚧 Future Enhancements
+
+- [ ] Hardware-triggered synchronized capture
+- [ ] 3D point cloud generation (PLY export)
 - [ ] GPU acceleration (CUDA)
-- [ ] Multiple stereo matching algorithms
-- [ ] Automatic parameter tuning
 - [ ] ROS integration
+- [ ] Automatic exposure/gain control
+- [ ] Video recording with depth
 - [ ] Web interface for remote viewing
-- [ ] Depth-based segmentation
+- [ ] Object detection with distance
 
-## Contributing
+## 📚 References
 
-Contributions are welcome! Please:
+- [IDS Peak Documentation](https://www.ids-imaging.com/manuals/ids-peak/)
+- [OpenCV Stereo Vision](https://docs.opencv.org/4.x/dd/d53/tutorial_py_depthmap.html)
+- [Camera Calibration Guide](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)
+- [GenICam Standard](https://www.emva.org/standards-technology/genicam/)
+
+## 🤝 Contributing
+
+Contributions welcome! Please:
 1. Fork the repository
 2. Create a feature branch
 3. Make your changes
 4. Add tests if applicable
 5. Submit a pull request
 
-## License
+## 📄 License
 
 This project is provided as-is for educational and research purposes.
 
-## Acknowledgments
-
-- OpenCV team for excellent computer vision library
-- IDS Imaging for camera hardware and SDK
-- Computer vision community for stereo vision algorithms
-
-## References
-
-- [OpenCV Stereo Vision Documentation](https://docs.opencv.org/4.x/dd/d53/tutorial_py_depthmap.html)
-- [IDS Software Suite](https://en.ids-imaging.com/downloads.html)
-- [Camera Calibration and 3D Reconstruction](https://docs.opencv.org/4.x/d9/d0c/group__calib3d.html)
-
-## Support
+## 💬 Support
 
 For issues and questions:
-- Check the Troubleshooting section
-- Review configuration files
-- Verify calibration quality
-- Open an issue on GitHub
+1. Check this README and troubleshooting section
+2. Verify configuration files
+3. Check calibration quality
+4. Open an issue on GitHub with:
+   - IDS Peak version
+   - Python version
+   - Operating system
+   - Error messages
+   - What you've already tried
 
-## Camera Specifications Reference
+## 🙏 Acknowledgments
 
-### IDS U3-3680XCP-C-HQ
-
-| Specification | Value |
-|---------------|-------|
-| Sensor | ON Semiconductor AR0521 |
-| Resolution | 2592 x 1944 (5.04 MP) |
-| Sensor Size | 5.702 x 4.277 mm (1/2.5") |
-| Pixel Size | 2.2 x 2.2 µm |
-| Interface | USB 3.0 (USB3 Vision) |
-| Frame Rate | Up to 49 fps @ full res |
-| Lens Mount | C-mount |
-| Shutter | Global shutter |
+- OpenCV team for computer vision library
+- IDS Imaging for cameras and SDK
+- Computer vision community for stereo algorithms
 
 ---
 
-**Happy Stereo Vision Processing! 📷📷📐**
+**Made with ❤️ for precision depth measurement**
+
+**Happy Stereo Vision! 📷📷📐**

@@ -38,15 +38,26 @@ venv.bak/
 *~
 
 # Captured images and videos
-calibration/calibration_images/*.png
-calibration/calibration_images/*.jpg
+calibration/calibration_images/left/*.png
+calibration/calibration_images/left/*.jpg
+calibration/calibration_images/right/*.png
+calibration/calibration_images/right/*.jpg
 *.avi
 *.mp4
 captured_*.png
 captured_*.jpg
+test_*.png
+test_*.jpg
 
-# Calibration data (optional - you may want to track these)
+# Keep directory structure but ignore images
+!calibration/calibration_images/left/.gitkeep
+!calibration/calibration_images/right/.gitkeep
+
+# Calibration data - uncomment to track calibration files in git
 # calibration_data/*.npz
+
+# Saved depth data
+captured_depth_*.npy
 
 # Logs
 *.log
@@ -63,3 +74,6 @@ temp/
 
 # Jupyter Notebooks
 .ipynb_checkpoints
+
+# Old README backup
+README_OLD.md
