@@ -5,6 +5,8 @@ Diagnostic script to check camera pixel format support
 
 import sys
 import os
+import traceback
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 from src.camera_interface import list_ids_peak_cameras
@@ -144,7 +146,6 @@ def diagnose_cameras():
                             
                     except Exception as e:
                         print(f"✗ Bayer conversion test failed: {e}")
-                        import traceback
                         traceback.print_exc()
                 
                 # Also try to set BGR8 if available
@@ -170,7 +171,6 @@ def diagnose_cameras():
             
         except Exception as e:
             print(f"Error opening camera: {e}")
-            import traceback
             traceback.print_exc()
     
     peak.Library.Close()

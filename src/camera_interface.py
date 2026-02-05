@@ -247,7 +247,7 @@ class IDSPeakCamera:
             exposure_time_node = nm.FindNode("ExposureTime")
             if exposure_time_node:
                 exposure_time_node.SetValue(float(exposure_us))
-                logger.info(f"Set exposure time: {exposure_us} μs")
+                logger.info(f"Set exposure time: {exposure_us} µs")
         except Exception as e:
             logger.warning(f"Could not set exposure: {e}")
         
