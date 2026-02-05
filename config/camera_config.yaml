@@ -1,4 +1,5 @@
 cameras:
+  # Resolution settings
   resolution:
     width: 2592
     height: 1944
@@ -6,25 +7,35 @@ cameras:
   # width: 1296
   # height: 972
   
-  framerate: 30
-  exposure: auto  # or specific value in microseconds
-  gain: 1.0
-  pixel_format: "BGR8"  # or "MONO8" for grayscale
+  # Camera settings
+  framerate: 30  # fps
+  exposure_us: 10000  # microseconds (10ms)
+  gain_db: 0.0  # decibels
   
+  # Camera identification
+  # Option 1: Use device indices (0, 1, 2...)
   left_camera:
-    device_id: 0  # or serial number
+    device_id: 0
     name: "Left Camera"
   
   right_camera:
-    device_id: 1  # or serial number
+    device_id: 1
     name: "Right Camera"
+  
+  # Option 2: Use serial numbers (more reliable)
+  # Uncomment and set your camera serial numbers:
+  # left_camera:
+  #   serial_number: "4103123456"
+  # right_camera:
+  #   serial_number: "4103123457"
 
+# Calibration settings
 calibration:
   checkerboard:
-    rows: 9
-    cols: 6
-    square_size: 25  # millimeters
+    rows: 9  # internal corners (vertical)
+    cols: 6  # internal corners (horizontal)
+    square_size_mm: 25.0  # size of each square in mm
   
   capture:
-    num_images: 20  # minimum for good calibration
-    delay: 1.0  # seconds between captures
+    num_images_min: 20  # minimum images for good calibration
+    delay_seconds: 1.0  # delay between captures
