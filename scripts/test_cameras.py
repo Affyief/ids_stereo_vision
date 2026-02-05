@@ -115,6 +115,11 @@ def main():
             if elapsed_time > 0:
                 fps = frame_count / elapsed_time
             
+            # Validate frame dimensions
+            if left_frame.shape[1] == 0 or left_frame.shape[0] == 0:
+                print("✗ Invalid frame dimensions")
+                break
+            
             # Resize frames for display (800px width each)
             display_width = 800
             scale = display_width / left_frame.shape[1]
@@ -132,13 +137,13 @@ def main():
             # Left camera labels
             cv2.putText(left_display, "Left Camera", (10, 30), 
                        font, font_scale, text_color, font_thickness)
-            cv2.putText(left_display, f"S/N: {info['left'].get('serial')}", (10, 60), 
+            cv2.putText(left_display, f"S/N: {info['left'].get('serial', 'N/A')}", (10, 60), 
                        font, font_scale * 0.6, text_color, font_thickness - 1)
             
             # Right camera labels
             cv2.putText(right_display, "Right Camera", (10, 30), 
                        font, font_scale, text_color, font_thickness)
-            cv2.putText(right_display, f"S/N: {info['right'].get('serial')}", (10, 60), 
+            cv2.putText(right_display, f"S/N: {info['right'].get('serial', 'N/A')}", (10, 60), 
                        font, font_scale * 0.6, text_color, font_thickness - 1)
             
             # Add FPS counter and instructions at bottom
