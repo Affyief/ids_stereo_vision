@@ -515,6 +515,9 @@ With typical setup (60mm baseline, 8mm lens, 1296x972 resolution):
 - Test images saved are grayscale (2D array) instead of color (3D array)
 - IDS Peak Cockpit shows color, but Python script shows monochrome
 
+**Root Cause:**
+The Python API provides **raw Bayer buffers** that must be explicitly converted using `ids_peak_ipl.ImageConverter`. Unlike IDS Peak Cockpit which performs automatic conversion for display, the Python API requires explicit demosaicing.
+
 **Diagnosis:**
 Run the diagnostic script to check camera pixel format support:
 ```bash
@@ -526,40 +529,58 @@ This will show:
 - Current pixel format setting
 - Whether BGR8/RGB8 can be set successfully
 
+Or use the debug script to test ImageConverter:
+```bash
+python scripts/debug_bayer.py
+```
+
 **Solutions:**
 
-1. **Check camera logs during initialization:**
+1. **Verify ImageConverter is working:**
    ```bash
-   python scripts/test_cameras.py 2>&1 | grep -E 'pixel|format|color|channel'
+   python scripts/test_cameras.py 2>&1 | grep -E 'Converting|ImageConverter|Bayer'
    ```
    
    You should see:
-   - `"Requesting pixel format: BayerGR8"` (or other Bayer format)
-   - `"Available pixel formats: ['BayerGR8', ...]"`
-   - `"✓ Set pixel format to: BayerGR8"`
-   - `"Demosaiced BayerGR8 to BGR"`
-   - `"✓ COLOR MODE CONFIRMED: 3 channels"` (in test output)
+   - `"Raw buffer format: BayerGR8, channels: 1"`
+   - `"Converting BayerGR8 → BGR8 using ImageConverter..."`
+   - `"✓ Bayer → BGR conversion successful: (972, 1296, 3)"`
+   - `"✓ Color Detection: Status: ✓✓✓ FULL RGB COLOR"`
 
-2. **If Bayer formats are available but BGR8 is not:**
-   - Use `BayerGR8` in `config/camera_config.yaml` (default)
-   - System will automatically demosaic to BGR8 color images
+2. **If ImageConverter is not available:**
+   - Check that `ids_peak_ipl` is properly installed
+   - Reinstall: `pip install /opt/ids/peak/generic_sdk/ipl/binding/python/wheel/x86_64/ids_peak_ipl-*.whl`
+   - Verify: `python -c "from ids_peak_ipl import ids_peak_ipl as ipl; print(ipl.ImageConverter)"`
+
+3. **If Bayer formats are available but BGR8 is not:**
+   - Use `BayerGR8` or `BGR8` in `config/camera_config.yaml` (both map to BayerGR8 sensor format)
+   - System will automatically use ImageConverter to demosaic to BGR8 color images
    - Try other Bayer variants (`BayerRG8`, `BayerBG8`, `BayerGB8`) if needed
 
-3. **If no Bayer or color formats are available:**
+4. **If no Bayer or color formats are available:**
    - Verify camera model: Ensure cameras are color variants (U3-3680XCP-**C**), not mono (U3-3680XCP-M)
    - Check with IDS Peak Cockpit that cameras show color
 
-4. **Check for SDK issues:**
+5. **Check for SDK issues:**
    - Ensure IDS Peak SDK is up to date
    - Reinstall IDS Peak IPL Python bindings
 
-5. **Manual testing:**
+6. **Manual testing:**
    ```python
    from src.camera_interface import IDSPeakCamera
+   from ids_peak_ipl import ids_peak_ipl as ipl
+   
    cam = IDSPeakCamera(device_index=0)
-   cam.initialize(pixel_format="BayerGR8")
+   cam.initialize(pixel_format="BGR8")
    frame = cam.capture_frame()
    print(f"Frame shape: {frame.shape}")  # Should be (H, W, 3) for color
+   
+   # Test ImageConverter directly
+   try:
+       converter = ipl.ImageConverter()
+       print("✓ ImageConverter is available")
+   except AttributeError:
+       print("✗ ImageConverter is NOT available - reinstall ids_peak_ipl")
    ```
 
 **Expected Behavior:**
