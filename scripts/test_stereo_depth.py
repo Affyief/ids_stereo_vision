@@ -172,7 +172,7 @@ class StereoDepthMeasurement:
         print("STEREO DEPTH MEASUREMENT")
         print("=" * 70)
         print("Controls:")
-        print("  LEFT CLICK   - Measure distance at point")
+        print("  MOVE MOUSE   - Measure distance at point")
         print("  'd'          - Toggle disparity/rectified view")
         print("  's'          - Save current images")
         print("  '+'          - Increase disparities")

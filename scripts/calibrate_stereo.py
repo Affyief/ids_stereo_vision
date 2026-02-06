@@ -174,20 +174,20 @@ def capture_calibration_images(stereo_system, pattern_size, num_images=25):
                     key2 = cv2.waitKey(2000) & 0xFF
                     if key2 == ord('q'):
                         print("Calibration aborted.")
-                        return None, None, None, None, None
+                        return None
     
     except KeyboardInterrupt:
         print("\nCalibration interrupted by user")
         if captured_count >= 20:
             print(f"Continuing with {captured_count} captured pairs")
         else:
-            return None, None, None, None, None
+            return None
     
     finally:
         cv2.destroyAllWindows()
     
     print(f"\n✓ Captured {captured_count} stereo pairs")
-    return left_images, right_images, object_points_list, left_corners_list, right_corners_list
+    return (left_images, right_images, object_points_list, left_corners_list, right_corners_list)
 
 
 def calibrate_cameras(object_points, left_corners, right_corners, image_size):
@@ -424,12 +424,13 @@ def main():
     try:
         # Capture calibration images
         print("\n4. Capturing calibration images...")
-        left_images, right_images, object_points, left_corners, right_corners = \
-            capture_calibration_images(stereo, pattern_size, num_images=25)
+        result = capture_calibration_images(stereo, pattern_size, num_images=25)
         
-        if left_images is None or len(left_images) < 20:
+        if result is None or result[0] is None or len(result[0]) < 20:
             print("✗ Insufficient calibration images")
             return 1
+        
+        left_images, right_images, object_points, left_corners, right_corners = result
         
         # Get image size
         image_size = (left_images[0].shape[1], left_images[0].shape[0])
