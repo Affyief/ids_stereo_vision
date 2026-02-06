@@ -4,6 +4,7 @@ Uses modern IDS Peak SDK with GenICam/GenTL
 """
 
 import logging
+import traceback
 from typing import Tuple, Optional, List
 import numpy as np
 
@@ -386,7 +387,6 @@ class IDSPeakCamera:
             
         except Exception as e:
             logger.error(f"Failed to capture frame: {e}")
-            import traceback
             traceback.print_exc()
             return None
     

@@ -25,6 +25,14 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+def is_grayscale_bgr(image):
+    """Check if a BGR image is actually grayscale (all channels identical)"""
+    if len(image.shape) != 3 or image.shape[2] != 3:
+        return False
+    return (np.array_equal(image[:,:,0], image[:,:,1]) and 
+            np.array_equal(image[:,:,1], image[:,:,2]))
+
+
 def diagnose_cameras():
     """Check what pixel formats cameras actually support"""
     
@@ -147,7 +155,7 @@ def diagnose_cameras():
                                 
                                 # Check if it's color or grayscale
                                 bgr_only = numpy_image[:, :, :3]
-                                if np.array_equal(bgr_only[:,:,0], bgr_only[:,:,1]) and np.array_equal(bgr_only[:,:,1], bgr_only[:,:,2]):
+                                if is_grayscale_bgr(bgr_only):
                                     print("✗ All BGR channels identical = Grayscale")
                                 else:
                                     print("✓ BGR channels differ = Color image")
@@ -161,7 +169,7 @@ def diagnose_cameras():
                                 numpy_image = ipl_image.get_numpy_3D()
                                 
                                 # Check if all channels are identical (grayscale stored as BGR)
-                                if np.array_equal(numpy_image[:,:,0], numpy_image[:,:,1]) and np.array_equal(numpy_image[:,:,1], numpy_image[:,:,2]):
+                                if is_grayscale_bgr(numpy_image):
                                     print("✗ All channels identical = Grayscale image stored as BGR")
                                 else:
                                     print("✓ Channels differ = Color image")

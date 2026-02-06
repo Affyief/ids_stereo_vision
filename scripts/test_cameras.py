@@ -141,8 +141,9 @@ def main():
                 print(f"  Channels: {channels}")
                 if channels == 3:
                     # Check if it's real color or grayscale stored as BGR
-                    is_color = not np.array_equal(left_frame[:,:,0], left_frame[:,:,1]) or \
-                               not np.array_equal(left_frame[:,:,1], left_frame[:,:,2])
+                    # Efficient check: if all channels are equal, it's grayscale
+                    is_color = not (np.array_equal(left_frame[:,:,0], left_frame[:,:,1]) and 
+                                   np.array_equal(left_frame[:,:,1], left_frame[:,:,2]))
                     if is_color:
                         print(f"  Status: ✓✓✓ FULL RGB COLOR")
                     else:
