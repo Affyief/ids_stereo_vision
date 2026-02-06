@@ -426,11 +426,15 @@ def main():
         print("\n4. Capturing calibration images...")
         result = capture_calibration_images(stereo, pattern_size, num_images=25)
         
-        if result is None or result[0] is None or len(result[0]) < 20:
+        if result is None:
             print("✗ Insufficient calibration images")
             return 1
         
         left_images, right_images, object_points, left_corners, right_corners = result
+        
+        if len(left_images) < 20:
+            print("✗ Insufficient calibration images")
+            return 1
         
         # Get image size
         image_size = (left_images[0].shape[1], left_images[0].shape[0])

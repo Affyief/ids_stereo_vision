@@ -234,7 +234,7 @@ class StereoDepthMeasurement:
                     distance_mm = depth_mm[self.mouse_y, self.mouse_x]
                     disparity_value = disparity[self.mouse_y, self.mouse_x]
                     
-                    if distance_mm > 0 and distance_mm < 10000:  # Valid range
+                    if 0 < distance_mm < 10000:  # Valid range
                         distance_m = distance_mm / 1000.0
                         text = f"Distance: {distance_m:.2f} m ({distance_mm:.0f} mm)"
                         disp_text = f"Disparity: {disparity_value:.1f} px"
