@@ -25,6 +25,14 @@ logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
 
+def is_grayscale_bgr(image):
+    """Check if a BGR image is actually grayscale (all channels identical)"""
+    if len(image.shape) != 3 or image.shape[2] != 3:
+        return False
+    return (np.array_equal(image[:,:,0], image[:,:,1]) and 
+            np.array_equal(image[:,:,1], image[:,:,2]))
+
+
 def diagnose_cameras():
     """Check what pixel formats cameras actually support"""
     
@@ -126,16 +134,61 @@ def diagnose_cameras():
                                 buffer.Height()
                             )
                             
-                            # Get as 2D numpy array (raw Bayer)
-                            numpy_image = ipl_image.get_numpy_2D()
+                            # Check IPL format
+                            ipl_format = ipl_image.PixelFormat()
+                            format_name = ipl_format.Name()
+                            num_channels = ipl_format.NumChannels()
                             
-                            # Demosaic using OpenCV
-                            bgr_image = cv2.cvtColor(numpy_image, cv2.COLOR_BayerGR2BGR)
+                            print(f"\n=== Frame Info ===")
+                            print(f"IPL format: {format_name}")
+                            print(f"Channels: {num_channels}")
                             
-                            print(f"✓ Bayer conversion successful!")
-                            print(f"  Input: {numpy_image.shape} (Bayer raw)")
-                            print(f"  Output: {bgr_image.shape} (BGR color)")
-                            print(f"  Channels: {bgr_image.shape[2]}")
+                            # Check if it's 4-channel BGRa8
+                            if num_channels == 4:
+                                print("\n⚠️  Frame is 4-channel (BGRa8)!")
+                                print("IDS Peak IPL is outputting BGR + Alpha")
+                                print("Need to strip alpha channel to get BGR8")
+                                
+                                # Get image and strip alpha
+                                numpy_image = ipl_image.get_numpy_3D()
+                                print(f"  Full shape: {numpy_image.shape}")
+                                
+                                # Check if it's color or grayscale
+                                bgr_only = numpy_image[:, :, :3]
+                                if is_grayscale_bgr(bgr_only):
+                                    print("✗ All BGR channels identical = Grayscale")
+                                else:
+                                    print("✓ BGR channels differ = Color image")
+                                
+                                # Strip alpha
+                                bgr_image = numpy_image[:, :, :3]
+                                print(f"✓ After stripping alpha: {bgr_image.shape} (BGR8)")
+                                
+                            elif num_channels == 3:
+                                print("\n✓ Frame is 3-channel (BGR8)")
+                                numpy_image = ipl_image.get_numpy_3D()
+                                
+                                # Check if all channels are identical (grayscale stored as BGR)
+                                if is_grayscale_bgr(numpy_image):
+                                    print("✗ All channels identical = Grayscale image stored as BGR")
+                                else:
+                                    print("✓ Channels differ = Color image")
+                                
+                                bgr_image = numpy_image
+                                print(f"  Shape: {bgr_image.shape}")
+                                
+                            elif num_channels == 1:
+                                print("\n⚠️  Frame is 1-channel (raw Bayer or mono)")
+                                # Get as 2D numpy array (raw Bayer)
+                                numpy_image = ipl_image.get_numpy_2D()
+                                
+                                # Try to demosaic using OpenCV
+                                bgr_image = cv2.cvtColor(numpy_image, cv2.COLOR_BayerGR2BGR)
+                                
+                                print(f"  Input: {numpy_image.shape} (Bayer raw)")
+                                print(f"  Output: {bgr_image.shape} (BGR color)")
+                            
+                            print(f"✓ Processing successful!")
                             
                             # Stop acquisition
                             nodemap.FindNode("AcquisitionStop").Execute()
@@ -145,7 +198,7 @@ def diagnose_cameras():
                             datastream.RevokeBuffer(buffer)
                             
                     except Exception as e:
-                        print(f"✗ Bayer conversion test failed: {e}")
+                        print(f"✗ Frame processing test failed: {e}")
                         traceback.print_exc()
                 
                 # Also try to set BGR8 if available

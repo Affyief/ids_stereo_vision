@@ -4,9 +4,9 @@ Uses modern IDS Peak SDK with GenICam/GenTL
 """
 
 import logging
+import traceback
 from typing import Tuple, Optional, List
 import numpy as np
-import cv2  # For Bayer demosaicing
 
 try:
     from ids_peak import ids_peak as peak
@@ -316,13 +316,16 @@ class IDSPeakCamera:
     
     def capture_frame(self, timeout_ms: int = 5000) -> Optional[np.ndarray]:
         """
-        Capture a single frame and convert Bayer to BGR
+        Capture a single frame
+        
+        Note: ids_peak_ipl automatically converts Bayer to BGRa (4 channels)
+        We strip the alpha channel to get BGR8 (3 channels)
         
         Args:
             timeout_ms: Timeout in milliseconds
             
         Returns:
-            numpy array with image data (BGR8 for color, demosaiced from Bayer) or None if failed
+            numpy array with image data (BGR8 - 3 channels) or None if failed
         """
         
         if not self.datastream:
@@ -345,67 +348,46 @@ class IDSPeakCamera:
             # Check pixel format
             ipl_format = ipl_image.PixelFormat()
             format_name = ipl_format.Name()
-            logger.debug(f"Buffer pixel format: {format_name}")
+            num_channels = ipl_format.NumChannels()
             
-            # Convert to numpy based on format
-            if ipl_format.NumChannels() == 3:
-                # Color image (BGR8, RGB8) - already in color
+            logger.debug(f"IPL format: {format_name}, channels: {num_channels}")
+            
+            # ids_peak_ipl automatically converts Bayer to BGRa (4 channels)
+            # We need to strip the alpha channel to get BGR (3 channels)
+            if num_channels == 4:
+                # BGRa8 - strip alpha channel (common for IDS color cameras)
                 numpy_image = ipl_image.get_numpy_3D()
-                logger.debug(f"Captured COLOR frame: {numpy_image.shape}")
+                # Strip alpha: keep only BGR channels (indices 0, 1, 2)
+                numpy_image = numpy_image[:, :, :3]
+                logger.debug(f"✓ BGRa → BGR (stripped alpha): {numpy_image.shape}")
                 
-            elif ipl_format.NumChannels() == 1:
-                # Check if it's Bayer (needs demosaicing)
-                if "Bayer" in format_name:
-                    # Get raw Bayer data as 2D array
-                    numpy_image = ipl_image.get_numpy_2D()
-                    
-                    # Demosaic Bayer to BGR using OpenCV
-                    bayer_patterns = {
-                        'BayerGR8': cv2.COLOR_BayerGR2BGR,
-                        'BayerRG8': cv2.COLOR_BayerRG2BGR,
-                        'BayerBG8': cv2.COLOR_BayerBG2BGR,
-                        'BayerGB8': cv2.COLOR_BayerGB2BGR
-                    }
-                    
-                    # Find the matching conversion code
-                    conversion_code = None
-                    for pattern_name, code in bayer_patterns.items():
-                        if pattern_name in format_name:
-                            conversion_code = code
-                            break
-                    
-                    if conversion_code is None:
-                        # Default to BayerGR if specific pattern not found
-                        conversion_code = cv2.COLOR_BayerGR2BGR
-                        logger.warning(f"Unknown Bayer pattern {format_name}. Defaulting to BayerGR2BGR, "
-                                     f"but colors may be incorrect. Please verify the camera's actual Bayer "
-                                     f"pattern and update the format mapping if needed.")
-                    
-                    # Convert Bayer to BGR
-                    numpy_image = cv2.cvtColor(numpy_image, conversion_code)
-                    logger.debug(f"Demosaiced {format_name} to BGR: {numpy_image.shape}")
-                    
-                else:
-                    # True monochrome
-                    numpy_image = ipl_image.get_numpy_1D().reshape(
-                        (ipl_image.Height(), ipl_image.Width())
-                    )
-                    logger.warning(f"Captured MONO frame: {numpy_image.shape}")
+            elif num_channels == 3:
+                # BGR8 - use directly
+                numpy_image = ipl_image.get_numpy_3D()
+                logger.debug(f"✓ BGR frame: {numpy_image.shape}")
+                
+            elif num_channels == 1:
+                # Monochrome
+                numpy_image = ipl_image.get_numpy_1D().reshape(
+                    (ipl_image.Height(), ipl_image.Width())
+                )
+                logger.debug(f"MONO frame: {numpy_image.shape}")
             else:
-                logger.error(f"Unexpected channel count: {ipl_format.NumChannels()}")
+                logger.error(f"Unexpected channel count: {num_channels}")
                 numpy_image = None
             
             # Requeue buffer for next capture
             self.datastream.QueueBuffer(buffer)
             
-            # Validate color
+            # Final validation
             if numpy_image is not None and len(numpy_image.shape) == 3:
-                logger.debug(f"✓ Color frame validated: {numpy_image.shape[2]} channels")
+                logger.debug(f"✓ Output: {numpy_image.shape} ({numpy_image.shape[2]} channels)")
             
             return numpy_image
             
         except Exception as e:
             logger.error(f"Failed to capture frame: {e}")
+            traceback.print_exc()
             return None
     
     def get_camera_info(self) -> dict:

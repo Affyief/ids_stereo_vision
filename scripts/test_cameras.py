@@ -137,20 +137,25 @@ def main():
                 channels = left_frame.shape[2] if left_frame.ndim >= 3 and len(left_frame.shape) > 2 else 1
                 print(f"\n✓ Color Detection:")
                 print(f"  Camera format: {pixel_format}")
-                if pixel_format.startswith('Bayer'):
-                    print(f"  Output format: BGR8 (demosaiced)")
-                else:
-                    print(f"  Output format: {pixel_format}")
-                print(f"  Frame shape: {left_frame.shape}")
+                print(f"  Output shape: {left_frame.shape}")
                 print(f"  Channels: {channels}")
                 if channels == 3:
-                    print(f"  Status: ✓ FULL RGB COLOR")
+                    # Check if it's real color or grayscale stored as BGR
+                    # Efficient check: if all channels are equal, it's grayscale
+                    is_color = not (np.array_equal(left_frame[:,:,0], left_frame[:,:,1]) and 
+                                   np.array_equal(left_frame[:,:,1], left_frame[:,:,2]))
+                    if is_color:
+                        print(f"  Status: ✓✓✓ FULL RGB COLOR")
+                    else:
+                        print(f"  Status: ✗ Grayscale stored as BGR (all channels identical)")
                 elif channels == 1:
                     print(f"  Status: ✗ MONOCHROME")
                     print("\n⚠⚠⚠ WARNING: CAMERAS ARE IN MONOCHROME MODE! ⚠⚠⚠")
                     print(f"Frame shape: {left_frame.shape} (should be 3D with 3 channels)")
                     print("Run: python scripts/diagnose_camera_format.py")
                     print("⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠⚠\n")
+                else:
+                    print(f"  Status: ⚠ Unexpected: {channels} channels")
                 color_warning_shown = True
             
             frame_count += 1
