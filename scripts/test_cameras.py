@@ -51,7 +51,7 @@ def main():
     # Load config
     print("\n2. Loading configuration...")
     try:
-        config = load_config()
+        config = load_config('config/camera_config.yaml')
         camera_config = config.get('cameras', {})
         
         # Display lens configuration if available

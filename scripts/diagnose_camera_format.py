@@ -150,7 +150,7 @@ def diagnose_cameras():
                                 print("Need to strip alpha channel to get BGR8")
                                 
                                 # Get image and strip alpha
-                                numpy_image = ipl_image.get_numpy_3D()
+                                numpy_image = ipl_image.get_numpy_3D().copy()
                                 print(f"  Full shape: {numpy_image.shape}")
                                 
                                 # Check if it's color or grayscale
@@ -166,7 +166,7 @@ def diagnose_cameras():
                                 
                             elif num_channels == 3:
                                 print("\n✓ Frame is 3-channel (BGR8)")
-                                numpy_image = ipl_image.get_numpy_3D()
+                                numpy_image = ipl_image.get_numpy_3D().copy()
                                 
                                 # Check if all channels are identical (grayscale stored as BGR)
                                 if is_grayscale_bgr(numpy_image):
@@ -180,7 +180,7 @@ def diagnose_cameras():
                             elif num_channels == 1:
                                 print("\n⚠️  Frame is 1-channel (raw Bayer or mono)")
                                 # Get as 2D numpy array (raw Bayer)
-                                numpy_image = ipl_image.get_numpy_2D()
+                                numpy_image = ipl_image.get_numpy_2D().copy()
                                 
                                 # Try to demosaic using OpenCV
                                 bgr_image = cv2.cvtColor(numpy_image, cv2.COLOR_BayerGR2BGR)
