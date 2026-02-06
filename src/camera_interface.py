@@ -12,8 +12,18 @@ try:
     from ids_peak import ids_peak as peak
     from ids_peak_ipl import ids_peak_ipl as ipl
     IDS_PEAK_AVAILABLE = True
+    
+    # Verify ImageConverter is available
+    try:
+        _ = ipl.ImageConverter
+        IDS_IPL_CONVERTER_AVAILABLE = True
+    except AttributeError:
+        IDS_IPL_CONVERTER_AVAILABLE = False
+        logging.warning("ids_peak_ipl.ImageConverter not available. Color conversion will fail!")
+        
 except ImportError:
     IDS_PEAK_AVAILABLE = False
+    IDS_IPL_CONVERTER_AVAILABLE = False
     logging.warning("IDS Peak SDK not available. Install from: https://en.ids-imaging.com/downloads.html")
 
 logger = logging.getLogger(__name__)
@@ -316,10 +326,10 @@ class IDSPeakCamera:
     
     def capture_frame(self, timeout_ms: int = 5000) -> Optional[np.ndarray]:
         """
-        Capture a single frame
+        Capture a single frame and convert Bayer to BGR using ids_peak_ipl ImageConverter
         
-        Note: ids_peak_ipl automatically converts Bayer to BGRa (4 channels)
-        We strip the alpha channel to get BGR8 (3 channels)
+        The camera outputs raw BayerGR8 data. We must explicitly convert it to BGR8
+        using ids_peak_ipl.ImageConverter.
         
         Args:
             timeout_ms: Timeout in milliseconds
@@ -350,43 +360,79 @@ class IDSPeakCamera:
             format_name = ipl_format.Name()
             num_channels = ipl_format.NumChannels()
             
-            logger.debug(f"IPL format: {format_name}, channels: {num_channels}")
+            logger.debug(f"Raw buffer format: {format_name}, channels: {num_channels}")
             
-            # ids_peak_ipl automatically converts Bayer to BGRa (4 channels)
-            # We need to strip the alpha channel to get BGR (3 channels)
-            if num_channels == 4:
-                # BGRa8 - strip alpha channel (common for IDS color cameras)
-                numpy_image = ipl_image.get_numpy_3D()
-                # Strip alpha: keep only BGR channels (indices 0, 1, 2)
-                numpy_image = numpy_image[:, :, :3]
-                logger.debug(f"✓ BGRa → BGR (stripped alpha): {numpy_image.shape}")
+            # Handle different pixel formats
+            if num_channels == 1 and "Bayer" in format_name:
+                # Raw Bayer pattern - MUST use ImageConverter to get color
+                logger.debug(f"Converting {format_name} → BGR8 using ImageConverter...")
+                
+                if not IDS_IPL_CONVERTER_AVAILABLE:
+                    logger.error("ImageConverter not available! Cannot convert Bayer to color.")
+                    logger.error("Install ids_peak_ipl with: pip install ids-peak-ipl")
+                    # Return grayscale fallback
+                    numpy_image = ipl_image.get_numpy_1D().reshape((ipl_image.Height(), ipl_image.Width()))
+                    self.datastream.QueueBuffer(buffer)
+                    return numpy_image
+                
+                try:
+                    # Create image converter
+                    converter = ipl.ImageConverter()
+                    
+                    # Convert Bayer → BGR8
+                    # This performs demosaicing to produce full RGB color
+                    ipl_image_converted = converter.Convert(
+                        ipl_image,
+                        ipl.PixelFormatName_BGR8
+                    )
+                    
+                    # Get numpy array (now 3 channels BGR)
+                    numpy_image = ipl_image_converted.get_numpy_3D()
+                    logger.debug(f"✓ Bayer → BGR conversion successful: {numpy_image.shape}")
+                    
+                except Exception as e:
+                    logger.error(f"Failed to convert Bayer to BGR: {e}")
+                    # Fallback: return raw Bayer as grayscale
+                    numpy_image = ipl_image.get_numpy_1D().reshape(
+                        (ipl_image.Height(), ipl_image.Width())
+                    )
+                    logger.warning(f"Fallback: returning raw Bayer as grayscale {numpy_image.shape}")
+                
+            elif num_channels == 4:
+                # BGRa8 format (BGR + Alpha) - strip alpha channel
+                numpy_image = ipl_image.get_numpy_3D()[:, :, :3]
+                logger.debug(f"✓ BGRa8 → BGR8 (stripped alpha): {numpy_image.shape}")
                 
             elif num_channels == 3:
-                # BGR8 - use directly
+                # Already BGR8
                 numpy_image = ipl_image.get_numpy_3D()
-                logger.debug(f"✓ BGR frame: {numpy_image.shape}")
+                logger.debug(f"✓ BGR8 (direct): {numpy_image.shape}")
                 
-            elif num_channels == 1:
-                # Monochrome
+            elif num_channels == 1 and "Mono" in format_name:
+                # True monochrome camera (not Bayer)
                 numpy_image = ipl_image.get_numpy_1D().reshape(
                     (ipl_image.Height(), ipl_image.Width())
                 )
-                logger.debug(f"MONO frame: {numpy_image.shape}")
+                logger.debug(f"MONO: {numpy_image.shape}")
             else:
-                logger.error(f"Unexpected channel count: {num_channels}")
+                logger.error(f"Unexpected pixel format: {format_name}, channels: {num_channels}")
                 numpy_image = None
             
             # Requeue buffer for next capture
             self.datastream.QueueBuffer(buffer)
             
-            # Final validation
-            if numpy_image is not None and len(numpy_image.shape) == 3:
-                logger.debug(f"✓ Output: {numpy_image.shape} ({numpy_image.shape[2]} channels)")
+            # Validate output is color
+            if numpy_image is not None:
+                if len(numpy_image.shape) == 3 and numpy_image.shape[2] == 3:
+                    logger.debug(f"✓ Output validated: BGR8 {numpy_image.shape}")
+                elif len(numpy_image.shape) == 2:
+                    logger.warning(f"⚠ Output is grayscale: {numpy_image.shape}")
             
             return numpy_image
             
         except Exception as e:
             logger.error(f"Failed to capture frame: {e}")
+            import traceback
             traceback.print_exc()
             return None
     
