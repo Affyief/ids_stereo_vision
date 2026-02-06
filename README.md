@@ -297,40 +297,57 @@ stereo:
 
 ### Color Image Processing
 
-#### Bayer Pattern Format
+#### IDS Peak Color Pipeline
 
-The IDS U3-3680XCP-C cameras output **Bayer pattern** (raw color data), not pre-processed RGB/BGR. This is standard for industrial cameras.
+The IDS U3-3680XCP-C cameras use the following color processing pipeline:
 
-**How it works:**
+**Camera Sensor → IDS Peak IPL → Python**
 
-1. Camera captures: **BayerGR8** (raw 8-bit Bayer pattern)
-2. Python converts: **BayerGR8 → BGR8** (OpenCV demosaicing)
-3. You receive: **Full color BGR8 images** (3 channels)
+1. **Camera captures:** BayerGR8 (raw 8-bit Bayer pattern from sensor)
+2. **IDS Peak IPL converts:** BayerGR8 → **BGRa8** (4 channels: Blue, Green, Red, Alpha)
+3. **Python strips alpha:** BGRa8 → **BGR8** (3 channels for OpenCV)
 
-**Bayer Pattern:**
-```
-G R G R G R
-B G B G B G
-G R G R G R
-B G B G B G
-```
+#### Why BGRa8?
 
-The software automatically demosaics this to full RGB color using `cv2.cvtColor()`.
+IDS Peak's Image Processing Library (IPL) automatically demosaics Bayer patterns and outputs **BGRa8** format:
+- **B** = Blue channel
+- **G** = Green channel  
+- **R** = Red channel
+- **a** = Alpha channel (unused, set to 255)
 
-**Configuration:**
+The alpha channel is not needed for computer vision applications, so we strip it to produce standard BGR8 for OpenCV.
+
+#### Configuration
 
 ```yaml
 cameras:
-  pixel_format: "BayerGR8"  # Raw Bayer (auto-converted to BGR)
+  pixel_format: "BGR8"  # Automatically handled as BayerGR8 → BGRa8 → BGR8
 ```
 
-**Supported Bayer formats:**
-- `BayerGR8` - Green-Red pattern (most common)
-- `BayerRG8` - Red-Green pattern
-- `BayerBG8` - Blue-Green pattern
-- `BayerGB8` - Green-Blue pattern
+The software automatically:
+1. ✅ Requests BayerGR8 from camera hardware
+2. ✅ Receives BGRa8 from ids_peak_ipl (4 channels)
+3. ✅ Strips alpha channel to produce BGR8 (3 channels)
+4. ✅ Delivers standard OpenCV-compatible BGR8 images
 
-**Performance:** Demosaicing adds ~1-2ms per frame (negligible at 30 fps).
+**Performance:** Alpha stripping adds <0.1ms per frame (negligible overhead).
+
+#### Verification
+
+Check that color is working correctly:
+
+```bash
+python scripts/test_cameras.py
+```
+
+Expected output:
+```
+✓ Color Detection:
+  Camera format: BayerGR8 (sensor)
+  IPL format: BGRa8 (4 channels)
+  Output format: BGR8 (3 channels, alpha stripped)
+  Status: ✓ FULL RGB COLOR
+```
 
 ### Pixel Format Configuration
 
