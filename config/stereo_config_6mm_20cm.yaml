@@ -1,0 +1,43 @@
+# Stereo Vision Configuration for 6mm lens at 20cm distance
+# Optimized for IDS u3-3680xcp-c cameras
+
+system:
+  baseline_estimate: 120.0  # mm - approximate distance between camera centers
+  calibration_pattern:
+    type: "chessboard"
+    width: 10      # internal corners (horizontal)
+    height: 7      # internal corners (vertical)
+    square_size: 12.0  # mm - measured size of each square
+    # This gives an 11×8 square pattern (132mm × 96mm total)
+    # Suitable for ~190mm field of view at 20cm with 6mm lens
+  
+stereo_matching:
+  algorithm: "SGBM"  # or "BM" for faster processing
+  min_disparity: 0
+  num_disparities: 128  # must be divisible by 16
+  block_size: 11
+  uniqueness_ratio: 10
+  speckle_window_size: 100
+  speckle_range: 32
+  disp12_max_diff: 1
+  
+display:
+  window_width: 1920
+  window_height: 1080
+  fps_target: 30
+  depth_color_map: "JET"
+  min_distance: 100  # mm - minimum measurable distance
+  max_distance: 3000  # mm - maximum measurable distance
+  
+cameras:
+  left:
+    device_id: 0
+    exposure: 10  # ms
+    gain: 1.0
+  right:
+    device_id: 1
+    exposure: 10  # ms
+    gain: 1.0
+
+# To generate this pattern:
+# python scripts/generate_pattern.py --rows 8 --cols 11 --size 12 --output pattern_6mm_20cm.png

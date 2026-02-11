@@ -112,7 +112,11 @@ ids_stereo_vision/
 ├── scripts/
 │   ├── capture_calibration_images.py # Capture calibration pairs
 │   ├── run_calibration.py            # Run calibration process
-│   └── run_stereo_system.py          # Main application
+│   ├── run_stereo_system.py          # Main application
+│   ├── calculate_calibration_pattern.py # Pattern calculator
+│   └── generate_pattern.py           # Pattern generator
+├── docs/
+│   └── CALIBRATION_PATTERN_GUIDE.md  # Detailed pattern guide
 ├── tests/
 │   └── test_camera_connection.py     # Camera connection tests
 └── output/                           # Saved frames and data (created)
@@ -138,12 +142,43 @@ cameras:
 
 ### 2. Calibrate Cameras
 
-#### Step 2a: Print Calibration Pattern
+#### Step 2a: Determine Optimal Pattern for Your Setup
 
-Print a chessboard pattern (default: 9x6 internal corners, 25mm squares).
-You can download patterns from: https://markhedleyjones.com/projects/calibration-checkerboard-collection
+**IMPORTANT**: Pattern size depends on your lens focal length and calibration distance!
 
-#### Step 2b: Capture Calibration Images
+**For 20cm calibration distance:**
+
+1. **Find your lens focal length** (check the lens marking - e.g., "6mm", "8mm")
+
+2. **Calculate the optimal pattern:**
+   ```bash
+   python scripts/calculate_calibration_pattern.py --focal 6 --distance 200
+   ```
+   This will recommend the best pattern for your specific setup.
+
+3. **Generate the pattern:**
+   ```bash
+   # Use the values from the calculator output
+   python scripts/generate_pattern.py --rows 8 --cols 11 --size 12
+   ```
+
+**Quick Start Examples:**
+- **6mm lens at 20cm**: Use `config/stereo_config_6mm_20cm.yaml`
+- **8mm lens at 20cm**: Use `config/stereo_config_8mm_20cm.yaml`
+- **6mm lens at 30cm** (easier): Use `config/stereo_config_6mm_30cm.yaml`
+
+See `docs/CALIBRATION_PATTERN_GUIDE.md` for detailed guidance.
+
+#### Step 2b: Print Calibration Pattern
+
+**Critical**: Print at 100% scale (no "fit to page")!
+
+1. Open the generated `calibration_pattern.png`
+2. Print settings: 100% scale, highest quality
+3. Verify with ruler: squares must be exact size
+4. Mount on flat, rigid surface
+
+#### Step 2c: Capture Calibration Images
 
 ```bash
 python scripts/capture_calibration_images.py --count 30
@@ -154,7 +189,7 @@ python scripts/capture_calibration_images.py --count 30
 - Capture at least 20-30 pairs for good calibration
 - Cover the entire field of view
 
-#### Step 2c: Run Calibration
+#### Step 2d: Run Calibration
 
 ```bash
 python scripts/run_calibration.py --visualize

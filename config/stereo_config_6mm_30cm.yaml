@@ -1,0 +1,44 @@
+# Stereo Vision Configuration for 6mm lens at 30cm distance (EASIER)
+# Optimized for IDS u3-3680xcp-c cameras
+# Recommended for beginners - larger pattern, easier to print and use
+
+system:
+  baseline_estimate: 120.0  # mm - approximate distance between camera centers
+  calibration_pattern:
+    type: "chessboard"
+    width: 9       # internal corners (horizontal)
+    height: 6      # internal corners (vertical)
+    square_size: 18.0  # mm - measured size of each square
+    # This gives a 10×7 square pattern (180mm × 126mm total)
+    # Suitable for ~285mm field of view at 30cm with 6mm lens
+  
+stereo_matching:
+  algorithm: "SGBM"  # or "BM" for faster processing
+  min_disparity: 0
+  num_disparities: 128  # must be divisible by 16
+  block_size: 11
+  uniqueness_ratio: 10
+  speckle_window_size: 100
+  speckle_range: 32
+  disp12_max_diff: 1
+  
+display:
+  window_width: 1920
+  window_height: 1080
+  fps_target: 30
+  depth_color_map: "JET"
+  min_distance: 200  # mm - adjust for 30cm distance
+  max_distance: 5000  # mm
+  
+cameras:
+  left:
+    device_id: 0
+    exposure: 10  # ms
+    gain: 1.0
+  right:
+    device_id: 1
+    exposure: 10  # ms
+    gain: 1.0
+
+# To generate this pattern:
+# python scripts/generate_pattern.py --rows 7 --cols 10 --size 18 --output pattern_6mm_30cm.png
