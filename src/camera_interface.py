@@ -405,7 +405,7 @@ class IDSPeakCamera:
                 
             elif num_channels == 3:
                 # Already BGR8
-                numpy_image = ipl_image.get_numpy_3D()
+                numpy_image = ipl_image.get_numpy_3D().copy()
                 logger.debug(f"✓ BGR8 (direct): {numpy_image.shape}")
                 
             elif num_channels == 1 and "Mono" in format_name:
