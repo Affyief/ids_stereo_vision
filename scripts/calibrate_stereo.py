@@ -3,12 +3,14 @@
 Stereo camera calibration tool for IDS stereo vision system.
 
 This script captures synchronized stereo image pairs from two cameras,
-detects checkerboard corners, computes intrinsic and extrinsic calibration,
-and saves the results to config/stereo_calibration.yaml.
+detects calibration pattern corners (chessboard or ChArUco), computes 
+intrinsic and extrinsic calibration, and saves the results to 
+config/stereo_calibration.yaml.
 
-Supports the Robotiq U3 calibration pattern:
-- 16×22 inner corners (17×23 squares)
-- 8mm square size
+Supports configurable calibration patterns via config/stereo_config.yaml:
+- Traditional chessboard patterns
+- ChArUco (Chessboard + ArUco markers) for improved robustness
+- Configurable square sizes and marker dictionaries
 """
 
 import sys
@@ -34,13 +36,13 @@ logging.basicConfig(
 logger = logging.getLogger('stereo_calibration')
 
 
-def capture_calibration_images(stereo_system, pattern_size, num_images=25):
+def capture_calibration_images(stereo_system, pattern_config, num_images=25):
     """
     Capture stereo image pairs for calibration with live preview.
     
     Args:
         stereo_system: Initialized StereoCameraSystem
-        pattern_size: Tuple of (rows, cols) for inner corners
+        pattern_config: Dictionary with calibration pattern configuration
         num_images: Target number of image pairs to capture
         
     Returns:
@@ -52,18 +54,65 @@ def capture_calibration_images(stereo_system, pattern_size, num_images=25):
     left_corners_list = []
     right_corners_list = []
     
-    # Prepare 3D object points
-    objp = np.zeros((pattern_size[0] * pattern_size[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2)
-    objp *= 8.0  # 8mm square size for Robotiq U3 pattern
+    # Extract pattern configuration
+    pattern_type = pattern_config.get('type', 'chessboard')
+    pattern_rows = pattern_config.get('rows', 6)
+    pattern_cols = pattern_config.get('cols', 9)
+    square_size_mm = pattern_config.get('square_size_mm', 25.0)
+    
+    # For both patterns, rows and cols represent the number of inner corners
+    # For ChArUco, the board has (rows+1) x (cols+1) squares
+    inner_corners_size = (pattern_rows, pattern_cols)
+    
+    # Prepare 3D object points for traditional chessboard
+    # For ChArUco, object points are retrieved from the board itself (see charuco_objp below)
+    objp = None
+    if pattern_type != "charuco":
+        objp = np.zeros((inner_corners_size[0] * inner_corners_size[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:inner_corners_size[0], 0:inner_corners_size[1]].T.reshape(-1, 2)
+        objp *= square_size_mm  # Keep in millimeters for consistency
+    
+    # Initialize ChArUco board if needed
+    charuco_board = None
+    charuco_detector = None
+    charuco_objp = None
+    if pattern_type == "charuco":
+        aruco_dict_name = pattern_config.get('aruco_dict', 'DICT_4X4_50')
+        marker_size_mm = pattern_config.get('marker_size_mm', 11.0)
+        
+        # Get ArUco dictionary (compatible with OpenCV 4.7+)
+        aruco_dict_id = getattr(cv2.aruco, aruco_dict_name)
+        aruco_dict = cv2.aruco.getPredefinedDictionary(aruco_dict_id)
+        
+        # Create ChArUco board (rows+1 x cols+1 squares)
+        # Note: OpenCV's CharucoBoard uses meters for units
+        charuco_board = cv2.aruco.CharucoBoard(
+            (pattern_cols + 1, pattern_rows + 1),  # size (squaresX, squaresY)
+            square_size_mm / 1000.0,  # squareLength in meters
+            marker_size_mm / 1000.0,   # markerLength in meters
+            aruco_dict
+        )
+        
+        # Create detector for newer OpenCV API
+        charuco_detector = cv2.aruco.CharucoDetector(charuco_board)
+        
+        # For ChArUco, generate object points for all possible corners
+        # The board's corner coordinates in mm (ChArUco corner IDs are 0-indexed)
+        # This is created once and reused for all detections
+        charuco_objp = charuco_board.getChessboardCorners() * 1000.0  # Convert to mm
     
     print("\n" + "=" * 70)
     print("STEREO CALIBRATION - Image Capture Mode")
     print("=" * 70)
-    print(f"Pattern: {pattern_size[0]}×{pattern_size[1]} inner corners (Robotiq U3)")
+    if pattern_type == "charuco":
+        print(f"Pattern: ChArUco {inner_corners_size[0]}×{inner_corners_size[1]} corners")
+        print(f"Square size: {square_size_mm}mm, Marker size: {pattern_config.get('marker_size_mm', 11.0)}mm")
+    else:
+        print(f"Pattern: Chessboard {inner_corners_size[0]}×{inner_corners_size[1]} inner corners")
+        print(f"Square size: {square_size_mm}mm")
     print(f"Target: {num_images} image pairs")
     print("\nInstructions:")
-    print("  - Position checkerboard so BOTH cameras can see it clearly")
+    print(f"  - Position {pattern_type} board so BOTH cameras can see it clearly")
     print("  - Press SPACE when corners are detected (green overlay)")
     print("  - Capture from different angles and positions")
     print("  - Cover entire field of view")
@@ -85,16 +134,35 @@ def capture_calibration_images(stereo_system, pattern_size, num_images=25):
             left_gray = cv2.cvtColor(left_frame, cv2.COLOR_BGR2GRAY)
             right_gray = cv2.cvtColor(right_frame, cv2.COLOR_BGR2GRAY)
             
-            # Find checkerboard corners
-            ret_left, corners_left = cv2.findChessboardCorners(
-                left_gray, pattern_size,
-                cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
-            )
+            # Detect corners based on pattern type
+            ret_left = False
+            ret_right = False
+            corners_left = None
+            corners_right = None
+            charuco_ids_left = None
+            charuco_ids_right = None
             
-            ret_right, corners_right = cv2.findChessboardCorners(
-                right_gray, pattern_size,
-                cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
-            )
+            if pattern_type == "charuco":
+                # Detect ChArUco corners using newer OpenCV API
+                # CharucoDetector.detectBoard() returns (corners, ids, marker_corners, marker_ids)
+                # Left camera
+                corners_left, charuco_ids_left, _, _ = charuco_detector.detectBoard(left_gray)
+                ret_left = corners_left is not None and len(corners_left) >= 4
+                
+                # Right camera
+                corners_right, charuco_ids_right, _, _ = charuco_detector.detectBoard(right_gray)
+                ret_right = corners_right is not None and len(corners_right) >= 4
+            else:
+                # Traditional chessboard detection
+                ret_left, corners_left = cv2.findChessboardCorners(
+                    left_gray, inner_corners_size,
+                    cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
+                )
+                
+                ret_right, corners_right = cv2.findChessboardCorners(
+                    right_gray, inner_corners_size,
+                    cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
+                )
             
             # Create display frames
             left_display = left_frame.copy()
@@ -102,10 +170,16 @@ def capture_calibration_images(stereo_system, pattern_size, num_images=25):
             
             # Draw corners if found
             both_found = ret_left and ret_right
-            if ret_left:
-                cv2.drawChessboardCorners(left_display, pattern_size, corners_left, ret_left)
-            if ret_right:
-                cv2.drawChessboardCorners(right_display, pattern_size, corners_right, ret_right)
+            if ret_left and corners_left is not None:
+                if pattern_type == "charuco":
+                    cv2.aruco.drawDetectedCornersCharuco(left_display, corners_left)
+                else:
+                    cv2.drawChessboardCorners(left_display, inner_corners_size, corners_left, ret_left)
+            if ret_right and corners_right is not None:
+                if pattern_type == "charuco":
+                    cv2.aruco.drawDetectedCornersCharuco(right_display, corners_right)
+                else:
+                    cv2.drawChessboardCorners(right_display, inner_corners_size, corners_right, ret_right)
             
             # Add status text
             font = cv2.FONT_HERSHEY_SIMPLEX
@@ -143,19 +217,55 @@ def capture_calibration_images(stereo_system, pattern_size, num_images=25):
             key = cv2.waitKey(1) & 0xFF
             
             if key == ord(' ') and both_found:
-                # Refine corner positions
-                criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
-                corners_left_refined = cv2.cornerSubPix(
-                    left_gray, corners_left, (11, 11), (-1, -1), criteria
-                )
-                corners_right_refined = cv2.cornerSubPix(
-                    right_gray, corners_right, (11, 11), (-1, -1), criteria
-                )
+                # Refine corner positions and prepare object points
+                if pattern_type == "charuco":
+                    # For ChArUco, corners are already sub-pixel accurate
+                    # Use the detected corner IDs to select corresponding object points
+                    corners_left_refined = corners_left
+                    corners_right_refined = corners_right
+                    
+                    # Get object points for detected corners using their IDs
+                    # Note: charuco_ids are in shape (N, 1), flatten for indexing
+                    objp_left = charuco_objp[charuco_ids_left.flatten()]
+                    objp_right = charuco_objp[charuco_ids_right.flatten()]
+                    
+                    # For stereo calibration, we need matching corners in both images
+                    # Find common corner IDs
+                    ids_left_flat = charuco_ids_left.flatten()
+                    ids_right_flat = charuco_ids_right.flatten()
+                    common_ids = np.intersect1d(ids_left_flat, ids_right_flat)
+                    
+                    if len(common_ids) < 4:
+                        print(f"  Warning: Only {len(common_ids)} common corners, need at least 4")
+                        continue
+                    
+                    # Get indices of common corners in each image
+                    left_mask = np.isin(ids_left_flat, common_ids)
+                    right_mask = np.isin(ids_right_flat, common_ids)
+                    
+                    # Sort by corner ID to ensure correspondence
+                    left_sort_idx = np.argsort(ids_left_flat[left_mask])
+                    right_sort_idx = np.argsort(ids_right_flat[right_mask])
+                    
+                    # Select and sort corners and object points
+                    corners_left_refined = corners_left[left_mask][left_sort_idx]
+                    corners_right_refined = corners_right[right_mask][right_sort_idx]
+                    objp_common = charuco_objp[np.sort(common_ids)]  # Sort IDs to match sorted corners
+                else:
+                    # Traditional chessboard - refine corners with sub-pixel accuracy
+                    criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
+                    corners_left_refined = cv2.cornerSubPix(
+                        left_gray, corners_left, (11, 11), (-1, -1), criteria
+                    )
+                    corners_right_refined = cv2.cornerSubPix(
+                        right_gray, corners_right, (11, 11), (-1, -1), criteria
+                    )
+                    objp_common = objp
                 
                 # Store data
                 left_images.append(left_frame)
                 right_images.append(right_frame)
-                object_points_list.append(objp)
+                object_points_list.append(objp_common)
                 left_corners_list.append(corners_left_refined)
                 right_corners_list.append(corners_right_refined)
                 
@@ -363,11 +473,38 @@ def main():
     print("=" * 70)
     print("IDS STEREO VISION - Stereo Camera Calibration")
     print("=" * 70)
-    print("Pattern: Robotiq U3 (16×22 inner corners, 8mm squares)")
-    print("=" * 70 + "\n")
     
-    # Pattern size for Robotiq U3
-    pattern_size = (16, 22)  # Inner corners
+    # Load stereo configuration first to get pattern info
+    print("Loading stereo configuration...")
+    try:
+        stereo_config = load_config('config/stereo_config.yaml')
+        pattern_config = stereo_config.get('stereo', {}).get('calibration_pattern', {})
+        
+        # Display pattern info
+        pattern_type = pattern_config.get('type', 'chessboard')
+        rows = pattern_config.get('rows', 6)
+        cols = pattern_config.get('cols', 9)
+        square_size = pattern_config.get('square_size_mm', 25.0)
+        
+        if pattern_type == "charuco":
+            marker_size = pattern_config.get('marker_size_mm', 11.0)
+            aruco_dict = pattern_config.get('aruco_dict', 'DICT_4X4_50')
+            print(f"Pattern: ChArUco {rows}×{cols} corners ({rows+1}×{cols+1} squares)")
+            print(f"Square: {square_size}mm, Marker: {marker_size}mm, Dict: {aruco_dict}")
+        else:
+            print(f"Pattern: Chessboard {rows}×{cols} inner corners")
+            print(f"Square size: {square_size}mm")
+    except Exception as e:
+        logger.error(f"Failed to load stereo config: {e}")
+        logger.warning("Using default chessboard pattern: 6×9, 25mm squares")
+        pattern_config = {
+            'type': 'chessboard',
+            'rows': 6,
+            'cols': 9,
+            'square_size_mm': 25.0
+        }
+    
+    print("=" * 70 + "\n")
     
     # List available cameras
     print("1. Scanning for IDS Peak cameras...")
@@ -424,7 +561,7 @@ def main():
     try:
         # Capture calibration images
         print("\n4. Capturing calibration images...")
-        result = capture_calibration_images(stereo, pattern_size, num_images=25)
+        result = capture_calibration_images(stereo, pattern_config, num_images=25)
         
         if result is None:
             print("✗ Insufficient calibration images")
