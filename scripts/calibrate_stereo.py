@@ -135,21 +135,14 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
             
             if pattern_type == "charuco":
                 # Detect ChArUco corners using newer OpenCV API
+                # CharucoDetector.detectBoard() returns (corners, ids, marker_corners, marker_ids)
                 # Left camera
-                aruco_corners_left, aruco_ids_left, _ = aruco_detector.detectMarkers(left_gray)
-                if aruco_ids_left is not None and len(aruco_ids_left) > 0:
-                    ret_left, corners_left, charuco_ids_left = charuco_detector.detectBoard(
-                        left_gray, aruco_corners_left, aruco_ids_left
-                    )
-                    ret_left = ret_left and corners_left is not None and len(corners_left) >= 4
+                corners_left, charuco_ids_left, _, _ = charuco_detector.detectBoard(left_gray)
+                ret_left = corners_left is not None and len(corners_left) >= 4
                 
                 # Right camera
-                aruco_corners_right, aruco_ids_right, _ = aruco_detector.detectMarkers(right_gray)
-                if aruco_ids_right is not None and len(aruco_ids_right) > 0:
-                    ret_right, corners_right, charuco_ids_right = charuco_detector.detectBoard(
-                        right_gray, aruco_corners_right, aruco_ids_right
-                    )
-                    ret_right = ret_right and corners_right is not None and len(corners_right) >= 4
+                corners_right, charuco_ids_right, _, _ = charuco_detector.detectBoard(right_gray)
+                ret_right = corners_right is not None and len(corners_right) >= 4
             else:
                 # Traditional chessboard detection
                 ret_left, corners_left = cv2.findChessboardCorners(
