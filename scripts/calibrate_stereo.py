@@ -60,17 +60,17 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
     pattern_cols = pattern_config.get('cols', 9)
     square_size_mm = pattern_config.get('square_size_mm', 25.0)
     
-    # For chessboard, rows and cols are the number of inner corners
-    # For ChArUco, rows and cols are the number of inner corners (board has rows+1 x cols+1 squares)
-    pattern_size = (pattern_rows, pattern_cols)
+    # For both patterns, rows and cols represent the number of inner corners
+    # For ChArUco, the board has (rows+1) x (cols+1) squares
+    inner_corners_size = (pattern_rows, pattern_cols)
     
-    # Prepare 3D object points
-    # For traditional chessboard, all corners in a grid
-    # For ChArUco, we'll generate the full board's corner coordinates
-    # and use IDs to select the correct ones during calibration
-    objp = np.zeros((pattern_size[0] * pattern_size[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:pattern_size[0], 0:pattern_size[1]].T.reshape(-1, 2)
-    objp *= square_size_mm  # Keep in millimeters for consistency
+    # Prepare 3D object points for traditional chessboard
+    # For ChArUco, object points are retrieved from the board itself (see charuco_objp below)
+    objp = None
+    if pattern_type != "charuco":
+        objp = np.zeros((inner_corners_size[0] * inner_corners_size[1], 3), np.float32)
+        objp[:, :2] = np.mgrid[0:inner_corners_size[0], 0:inner_corners_size[1]].T.reshape(-1, 2)
+        objp *= square_size_mm  # Keep in millimeters for consistency
     
     # Initialize ChArUco board if needed
     aruco_dict = None
@@ -107,10 +107,10 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
     print("STEREO CALIBRATION - Image Capture Mode")
     print("=" * 70)
     if pattern_type == "charuco":
-        print(f"Pattern: ChArUco {pattern_size[0]}×{pattern_size[1]} corners")
+        print(f"Pattern: ChArUco {inner_corners_size[0]}×{inner_corners_size[1]} corners")
         print(f"Square size: {square_size_mm}mm, Marker size: {pattern_config.get('marker_size_mm', 11.0)}mm")
     else:
-        print(f"Pattern: Chessboard {pattern_size[0]}×{pattern_size[1]} inner corners")
+        print(f"Pattern: Chessboard {inner_corners_size[0]}×{inner_corners_size[1]} inner corners")
         print(f"Square size: {square_size_mm}mm")
     print(f"Target: {num_images} image pairs")
     print("\nInstructions:")
@@ -155,12 +155,12 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
             else:
                 # Traditional chessboard detection
                 ret_left, corners_left = cv2.findChessboardCorners(
-                    left_gray, pattern_size,
+                    left_gray, inner_corners_size,
                     cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
                 )
                 
                 ret_right, corners_right = cv2.findChessboardCorners(
-                    right_gray, pattern_size,
+                    right_gray, inner_corners_size,
                     cv2.CALIB_CB_ADAPTIVE_THRESH | cv2.CALIB_CB_NORMALIZE_IMAGE
                 )
             
@@ -174,12 +174,12 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
                 if pattern_type == "charuco":
                     cv2.aruco.drawDetectedCornersCharuco(left_display, corners_left)
                 else:
-                    cv2.drawChessboardCorners(left_display, pattern_size, corners_left, ret_left)
+                    cv2.drawChessboardCorners(left_display, inner_corners_size, corners_left, ret_left)
             if ret_right and corners_right is not None:
                 if pattern_type == "charuco":
                     cv2.aruco.drawDetectedCornersCharuco(right_display, corners_right)
                 else:
-                    cv2.drawChessboardCorners(right_display, pattern_size, corners_right, ret_right)
+                    cv2.drawChessboardCorners(right_display, inner_corners_size, corners_right, ret_right)
             
             # Add status text
             font = cv2.FONT_HERSHEY_SIMPLEX
@@ -250,7 +250,7 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
                     # Select and sort corners and object points
                     corners_left_refined = corners_left[left_mask][left_sort_idx]
                     corners_right_refined = corners_right[right_mask][right_sort_idx]
-                    objp_selected = charuco_objp[common_ids]
+                    objp_selected = charuco_objp[np.sort(common_ids)]  # Sort IDs to match sorted corners
                 else:
                     # Traditional chessboard - refine corners with sub-pixel accuracy
                     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
