@@ -387,7 +387,7 @@ class IDSPeakCamera:
                     )
                     
                     # Get numpy array (now 3 channels BGR)
-                    numpy_image = ipl_image_converted.get_numpy_3D()
+                    numpy_image = ipl_image_converted.get_numpy_3D().copy()
                     logger.debug(f"✓ Bayer → BGR conversion successful: {numpy_image.shape}")
                     
                 except Exception as e:
@@ -400,7 +400,7 @@ class IDSPeakCamera:
                 
             elif num_channels == 4:
                 # BGRa8 format (BGR + Alpha) - strip alpha channel
-                numpy_image = ipl_image.get_numpy_3D()[:, :, :3]
+                numpy_image = ipl_image.get_numpy_3D()[:, :, :3].copy()
                 logger.debug(f"✓ BGRa8 → BGR8 (stripped alpha): {numpy_image.shape}")
                 
             elif num_channels == 3:
