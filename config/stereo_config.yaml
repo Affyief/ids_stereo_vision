@@ -38,17 +38,18 @@ stereo:
     wls_sigma: 1.5
     median_blur: 5  # kernel size, 0 to disable
   
-  # Calibration pattern
   calibration_pattern:
-    type: "chessboard"
-    rows: 9  # Internal corners (not squares)
-    cols: 6
-    square_size_mm: 25.0  # Measure your checkerboard!
+    type: "charuco"
+    rows: 5
+    cols: 7
+    square_size_mm: 15.0
+    marker_size_mm: 11.0
+    aruco_dict: "DICT_4X4_50"
   
   # Depth range (dependent on baseline and focal length)
   # For 6mm lens with ~120mm baseline:
   visualization:
     colormap: "TURBO"  # JET, TURBO, HSV, etc.
-    min_distance_m: 0.3  # minimum valid distance (30cm)
+    min_distance_m: 0.15  # minimum valid distance (30cm)
     max_distance_m: 10.0  # maximum distance to display (10m)
     measurement_points: 9  # grid of distance measurements
