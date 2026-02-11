@@ -1,22 +1,22 @@
-# Example full contents of camera_interface.py from commit d2122c72fe40a42e2a4b82216ba710a4ab3b914f
-
-# Importing necessary libraries
 import cv2
-import numpy as np
+from abc import ABC, abstractmethod
 
-class CameraInterface:
-    def __init__(self, camera_id):
-        self.camera_id = camera_id
-        self.camera = cv2.VideoCapture(camera_id)
 
-    def read_frame(self):
-        ret, frame = self.camera.read()
-        if ret:
-            # Conversion from Bayer to BGR
-            frame = cv2.cvtColor(frame, cv2.COLOR_BAYER_BG2BGR)
-            return frame
-        else:
-            return None
+class ImageConverter(ABC):
+    @abstractmethod
+    def convert(self, image):
+        pass
 
-    def release(self):
-        self.camera.release()
+
+class BayerToBGRConverter(ImageConverter):
+    def convert(self, bayer_image):
+        # Assuming bayer_image is in the format of numpy array
+        return cv2.cvtColor(bayer_image, cv2.COLOR_BAYER_BG2BGR)
+
+
+if __name__ == '__main__':
+    # Test the converter with a sample Bayer image
+    sample_bayer_image = cv2.imread('sample_bayer_image.png', cv2.IMREAD_UNCHANGED)
+    converter = BayerToBGRConverter()
+    bgr_image = converter.convert(sample_bayer_image)
+    cv2.imwrite('output_image.png', bgr_image)
