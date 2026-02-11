@@ -73,10 +73,9 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
         objp *= square_size_mm  # Keep in millimeters for consistency
     
     # Initialize ChArUco board if needed
-    aruco_dict = None
     charuco_board = None
-    aruco_detector = None
     charuco_detector = None
+    charuco_objp = None
     if pattern_type == "charuco":
         aruco_dict_name = pattern_config.get('aruco_dict', 'DICT_4X4_50')
         marker_size_mm = pattern_config.get('marker_size_mm', 11.0)
@@ -94,13 +93,12 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
             aruco_dict
         )
         
-        # Create detectors for newer OpenCV API
-        aruco_detector = cv2.aruco.ArucoDetector(aruco_dict)
+        # Create detector for newer OpenCV API
         charuco_detector = cv2.aruco.CharucoDetector(charuco_board)
         
-        # For ChArUco, we need to generate object points for all possible corners
+        # For ChArUco, generate object points for all possible corners
         # The board's corner coordinates in mm (ChArUco corner IDs are 0-indexed)
-        # We'll use these with detected corner IDs during calibration
+        # This is created once and reused for all detections
         charuco_objp = charuco_board.getChessboardCorners() * 1000.0  # Convert to mm
     
     print("\n" + "=" * 70)
@@ -141,6 +139,8 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
             ret_right = False
             corners_left = None
             corners_right = None
+            charuco_ids_left = None
+            charuco_ids_right = None
             
             if pattern_type == "charuco":
                 # Detect ChArUco corners using newer OpenCV API
@@ -250,7 +250,7 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
                     # Select and sort corners and object points
                     corners_left_refined = corners_left[left_mask][left_sort_idx]
                     corners_right_refined = corners_right[right_mask][right_sort_idx]
-                    objp_selected = charuco_objp[np.sort(common_ids)]  # Sort IDs to match sorted corners
+                    objp_common = charuco_objp[np.sort(common_ids)]  # Sort IDs to match sorted corners
                 else:
                     # Traditional chessboard - refine corners with sub-pixel accuracy
                     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
@@ -260,12 +260,12 @@ def capture_calibration_images(stereo_system, pattern_config, num_images=25):
                     corners_right_refined = cv2.cornerSubPix(
                         right_gray, corners_right, (11, 11), (-1, -1), criteria
                     )
-                    objp_selected = objp
+                    objp_common = objp
                 
                 # Store data
                 left_images.append(left_frame)
                 right_images.append(right_frame)
-                object_points_list.append(objp_selected)
+                object_points_list.append(objp_common)
                 left_corners_list.append(corners_left_refined)
                 right_corners_list.append(corners_right_refined)
                 
