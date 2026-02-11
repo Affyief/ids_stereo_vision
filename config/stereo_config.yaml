@@ -1,7 +1,11 @@
-calibration_pattern:
-  type: "charuco"
-  rows: 5  # Internal corners (5x7 = 6x8 squares)
-  cols: 7
-  square_size_mm: 15.0  # Optimized for 20cm working distance
-  marker_size_mm: 11.0  # ArUco marker size (73% of square)
-  aruco_dict: "DICT_4X4_50"
+  # Calibration pattern (optimized for 20cm working distance)
+  calibration_pattern:
+    type: "charuco"  # ChArUco (recommended) or "chessboard"
+    rows: 5  # Internal corners for ChArUco (6 rows of squares)
+    cols: 7  # Internal corners for ChArUco (8 columns of squares)
+    square_size_mm: 15.0  # Optimized for 20cm working distance - MEASURE AFTER PRINTING!
+    marker_size_mm: 11.0  # ArUco marker size (73% of square size) - for ChArUco only
+    aruco_dict: "DICT_4X4_50"  # ArUco dictionary for ChArUco markers
+
+visualization:
+  min_distance_m: 0.15  # Updated to match the 15-25cm calibration range
