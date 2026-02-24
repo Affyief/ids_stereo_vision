@@ -1,333 +1,212 @@
 #!/usr/bin/env python3
-"""
-Single camera calibration script.
 
-This script calibrates a single camera using a checkerboard pattern.
-It computes the camera's intrinsic parameters (camera matrix and distortion coefficients).
+"""
+Interactive Single Camera Calibration Tool
+
+- Opens a live view from your camera (IDS U3-3680XCP-C, Sony IMX178 sensor).
+- Press "c" to capture calibration images (stored to ./calib_captures/).
+- When target number of captures is reached, calibrates automatically.
+- Displays results overlayed on a calibration image, with full parameter names and explanations.
+
+Camera: IDS U3-3680XCP-C
+Sensor: Sony IMX178 CMOS, 1/1.8″
+Active pixel size: 2592 x 1944 px
+Pixel size: 2.4 μm × 2.4 μm
+Active sensor area: 6.22 mm × 4.67 mm
 """
 
 import os
-import sys
-import argparse
-import logging
-from pathlib import Path
-import numpy as np
 import cv2
-from tqdm import tqdm
+import numpy as np
+import time
+from pathlib import Path
 
-# Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+# ---- Camera and sensor details (precise, per datasheet) ----
+CAMERA_MODEL = "IDS U3-3680XCP-C"
+SENSOR_TYPE = "Sony IMX178 CMOS (1/1.8″)"
+PIXEL_SIZE_UM = 2.4  # micrometers, square pixels
+IMAGE_WIDTH = 2592
+IMAGE_HEIGHT = 1944
+SENSOR_WIDTH_MM = IMAGE_WIDTH * PIXEL_SIZE_UM / 1000  # 6.22 mm
+SENSOR_HEIGHT_MM = IMAGE_HEIGHT * PIXEL_SIZE_UM / 1000  # 4.67 mm
 
-from src.utils import (
-    setup_logging,
-    load_config,
-    save_calibration_data,
-    calculate_reprojection_error,
-    print_camera_info,
-    get_project_root
-)
+# ---- Calibration pattern and session configuration ----
+SAVE_DIR = "calib_captures"
+NUM_IMAGES_NEEDED = 25
+CHECKERBOARD_ROWS = 5 # Number of inner corners in rows (chessboard squares - 1)
+CHECKERBOARD_COLS = 7 # Number of inner corners in columns (chessboard squares - 1)
+SQUARE_SIZE_MM = 15.0 # Actual side length of each calibration checkerboard square
 
+def ensure_dir(path):
+    os.makedirs(path, exist_ok=True)
 
-def find_checkerboard_corners(
-    images_dir: str,
-    checkerboard_size: tuple,
-    square_size_mm: float,
-    show_corners: bool = False
-) -> tuple:
-    """
-    Find checkerboard corners in calibration images.
+def capture_images():
+    ensure_dir(SAVE_DIR)
+    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, IMAGE_WIDTH)
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, IMAGE_HEIGHT)
+    if not cap.isOpened():
+        print("ERROR: Could not open camera.")
+        exit(1)
     
-    Args:
-        images_dir: Directory containing calibration images
-        checkerboard_size: Checkerboard size (rows, cols)
-        square_size_mm: Size of checkerboard square in mm
-        show_corners: Show detected corners for verification
-        
-    Returns:
-        Tuple of (object_points, image_points, image_size)
-    """
-    logger = logging.getLogger(__name__)
-    
-    # Prepare object points (3D coordinates of checkerboard corners)
+    print(f"\nCamera ready. Press 'c' to capture an image when the checkerboard is visible.")
+    print(f"Capture at various angles/distances. Need {NUM_IMAGES_NEEDED} images total.")
+    print("Press 'q' to quit early.")
+
+    img_count = 0
+    while img_count < NUM_IMAGES_NEEDED:
+        ret, frame = cap.read()
+        if not ret:
+            print("Failed to grab frame. Exiting.")
+            break
+
+        display = frame.copy()
+        status = f"Captured: {img_count}/{NUM_IMAGES_NEEDED}. Press 'c' to capture."
+        cv2.putText(display, status, (10, 35), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,255,0), 2)
+        cv2.imshow("Camera Capture", display)
+
+        key = cv2.waitKey(1) & 0xFF
+
+        if key == ord('c'):
+            filename = os.path.join(SAVE_DIR, f"calib_{img_count+1:02d}.png")
+            cv2.imwrite(filename, frame)
+            print(f"Saved {filename}")
+            img_count += 1
+            time.sleep(0.3)
+        elif key == ord('q'):
+            print("Quitting early.")
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    print(f"\nFinished image capture ({img_count} images).")
+    return img_count
+
+def find_checkerboard_corners(images_dir, checkerboard_size, square_size_mm, show_corners=False):
+    """Returns objpoints (world), imgpoints (pixels), image_size"""
     objp = np.zeros((checkerboard_size[0] * checkerboard_size[1], 3), np.float32)
-    objp[:, :2] = np.mgrid[0:checkerboard_size[0], 0:checkerboard_size[1]].T.reshape(-1, 2)
+    objp[:, :2] = np.mgrid[0:checkerboard_size[1], 0:checkerboard_size[0]].T.reshape(-1, 2)
     objp *= square_size_mm
-    
-    # Arrays to store object points and image points
-    obj_points = []  # 3D points in real world space
-    img_points = []  # 2D points in image plane
+
+    obj_points = []
+    img_points = []
     image_size = None
-    
-    # Get list of images
-    image_files = sorted([
+    images = sorted([
         f for f in os.listdir(images_dir)
         if f.lower().endswith(('.png', '.jpg', '.jpeg'))
     ])
-    
-    if not image_files:
-        logger.error(f"No images found in {images_dir}")
-        return None, None, None
-    
-    logger.info(f"Processing {len(image_files)} images...")
-    
-    successful_images = 0
-    
-    for filename in tqdm(image_files):
-        img_path = os.path.join(images_dir, filename)
+    if not images:
+        print(f"No calibration images found in {images_dir}")
+        return [], [], None
+
+    for fname in images:
+        img_path = os.path.join(images_dir, fname)
         img = cv2.imread(img_path)
-        
         if img is None:
-            logger.warning(f"Failed to load image: {filename}")
+            print(f"Failed to read {img_path}")
             continue
-        
-        # Store image size
-        if image_size is None:
-            image_size = (img.shape[1], img.shape[0])
-        
-        # Convert to grayscale
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        
-        # Find checkerboard corners
         ret, corners = cv2.findChessboardCorners(
             gray,
-            checkerboard_size,
+            (checkerboard_size[1], checkerboard_size[0]), # (cols, rows)
             cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE
         )
-        
         if ret:
-            # Refine corner positions
             criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001)
             corners_refined = cv2.cornerSubPix(gray, corners, (11, 11), (-1, -1), criteria)
-            
             obj_points.append(objp)
             img_points.append(corners_refined)
-            successful_images += 1
-            
-            # Optionally show corners
             if show_corners:
-                img_with_corners = cv2.drawChessboardCorners(
-                    img.copy(),
-                    checkerboard_size,
-                    corners_refined,
-                    ret
-                )
-                cv2.imshow('Checkerboard Corners', img_with_corners)
-                cv2.waitKey(500)
+                display = img.copy()
+                cv2.drawChessboardCorners(display, (checkerboard_size[1], checkerboard_size[0]), corners_refined, True)
+                cv2.imshow('Found Corners', display)
+                cv2.waitKey(300)
+            if image_size is None:
+                image_size = (img.shape[1], img.shape[0])
         else:
-            logger.warning(f"Checkerboard not found in: {filename}")
-    
+            print(f"No corners found in {fname}")
     if show_corners:
         cv2.destroyAllWindows()
-    
-    logger.info(f"Successfully processed {successful_images}/{len(image_files)} images")
-    
-    if successful_images < 10:
-        logger.error("Not enough successful images for calibration (minimum 10 recommended)")
-        return None, None, None
-    
+    print(f"Found corners in {len(obj_points)} out of {len(images)} images.")
     return obj_points, img_points, image_size
 
-
-def calibrate_camera(
-    obj_points: list,
-    img_points: list,
-    image_size: tuple,
-    use_lens_init: bool = True
-) -> tuple:
-    """
-    Calibrate camera using detected corners.
-    
-    Args:
-        obj_points: 3D object points
-        img_points: 2D image points
-        image_size: Image size (width, height)
-        use_lens_init: Use lens-based initial camera matrix estimate
-        
-    Returns:
-        Tuple of (ret, camera_matrix, dist_coeffs, rvecs, tvecs)
-    """
-    logger = logging.getLogger(__name__)
-    
-    logger.info("Starting camera calibration...")
-    
-    # Get initial camera matrix from lens specs if available
-    camera_matrix_init = None
-    flags = 0
-    
-    if use_lens_init:
-        try:
-            from src.utils import load_lens_config
-            lens_config = load_lens_config()
-            
-            if lens_config:
-                camera_matrix_init = lens_config['camera_matrix']
-                flags = cv2.CALIB_USE_INTRINSIC_GUESS
-                logger.info(f"Using lens-based initial camera matrix:")
-                logger.info(f"  fx = {lens_config['fx']:.1f} pixels")
-                logger.info(f"  fy = {lens_config['fy']:.1f} pixels")
-                logger.info(f"  Field of View: {lens_config['fov']['horizontal']:.1f}° × {lens_config['fov']['vertical']:.1f}°")
-        except Exception as e:
-            logger.warning(f"Could not load lens config for initial guess: {e}")
-    
-    ret, camera_matrix, dist_coeffs, rvecs, tvecs = cv2.calibrateCamera(
+def calibrate_camera(obj_points, img_points, image_size):
+    print("Calibrating camera using OpenCV ...")
+    ret, K, D, rvecs, tvecs = cv2.calibrateCamera(
         obj_points,
         img_points,
         image_size,
-        camera_matrix_init,
         None,
-        flags=flags
+        None
     )
-    
-    logger.info(f"Calibration RMS error: {ret:.4f} pixels")
-    
-    return ret, camera_matrix, dist_coeffs, rvecs, tvecs
+    mean_error = 0
+    for i in range(len(obj_points)):
+        imgpoints2, _ = cv2.projectPoints(obj_points[i], rvecs[i], tvecs[i], K, D)
+        error = cv2.norm(img_points[i], imgpoints2, cv2.NORM_L2) / len(imgpoints2)
+        mean_error += error
+    mean_error /= len(obj_points)
+    return ret, K, D, mean_error
 
+def display_results_over_image(img_path, K, D, mean_error):
+    img = cv2.imread(img_path)
+    overlay = img.copy()
+    params = [
+        ("Focal Length (fx, fy)", f"{K[0,0]:.2f}, {K[1,1]:.2f} px", "How 'zoomed in' camera is (in pixels)"),
+        ("Principal Point (cx, cy)", f"{K[0,2]:.2f}, {K[1,2]:.2f} px", "Where optical axis hits image (usually center)"),
+        ("Radial Distortion (k1, k2, k3)", f"{D[0][0]:.4f}, {D[0][1]:.4f}, {D[0][4]:.4f}", "Lens barrel/pincushion distortion"),
+        ("Tangential Distortion (p1, p2)", f"{D[0][2]:.4f}, {D[0][3]:.4f}", "Tilted lens or misalignment effects"),
+        ("Reprojection error", f"{mean_error:.4f} px", "Avg pixel error mapping model to detected points"),
+    ]
+    x, y = 50, 50
+    font = cv2.FONT_HERSHEY_SIMPLEX
+    cv2.putText(overlay, f"Camera: {CAMERA_MODEL} / {SENSOR_TYPE}", (x, y-20), font, 0.7, (255,255,0), 2)
+    for name, val, expl in params:
+        txt = f"{name}: {val} ({expl})"
+        cv2.putText(overlay, txt, (x, y), font, 0.7, (255,255,255), 2)
+        y += 30
+    cv2.imshow('Calibration Results', overlay)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 def main():
-    parser = argparse.ArgumentParser(description='Calibrate a single camera')
-    parser.add_argument(
-        '--camera',
-        choices=['left', 'right'],
-        required=True,
-        help='Which camera to calibrate'
-    )
-    parser.add_argument(
-        '--images-dir',
-        type=str,
-        help='Directory containing calibration images (default: calibration/calibration_images/{camera})'
-    )
-    parser.add_argument(
-        '--config',
-        type=str,
-        default='config/camera_config.yaml',
-        help='Path to camera configuration file'
-    )
-    parser.add_argument(
-        '--output',
-        type=str,
-        help='Output calibration file path (default: calibration_data/{camera}_camera_calibration.npz)'
-    )
-    parser.add_argument(
-        '--show-corners',
-        action='store_true',
-        help='Show detected corners for verification'
-    )
-    
-    args = parser.parse_args()
-    
-    # Setup logging
-    logger = setup_logging("INFO")
-    
-    # Get project root
-    project_root = get_project_root()
-    
-    # Load configuration
-    config_path = os.path.join(project_root, args.config)
-    config = load_config(config_path)
-    
-    # Get checkerboard parameters
-    checkerboard_size = (
-        config['calibration']['checkerboard']['rows'],
-        config['calibration']['checkerboard']['cols']
-    )
-    square_size_mm = config['calibration']['checkerboard']['square_size']
-    
-    # Determine images directory
-    if args.images_dir:
-        images_dir = args.images_dir
-    else:
-        images_dir = os.path.join(
-            project_root,
-            'calibration',
-            'calibration_images',
-            args.camera
-        )
-    
-    if not os.path.exists(images_dir):
-        logger.error(f"Images directory not found: {images_dir}")
-        logger.info("Please capture calibration images first using capture_calibration_images.py")
-        return 1
-    
-    # Determine output path
-    if args.output:
-        output_path = args.output
-    else:
-        output_path = os.path.join(
-            project_root,
-            'calibration_data',
-            f'{args.camera}_camera_calibration.npz'
-        )
-    
-    logger.info(f"Calibrating {args.camera} camera...")
-    logger.info(f"Checkerboard size: {checkerboard_size}")
-    logger.info(f"Square size: {square_size_mm} mm")
-    logger.info(f"Images directory: {images_dir}")
-    
-    # Find checkerboard corners
-    obj_points, img_points, image_size = find_checkerboard_corners(
-        images_dir,
-        checkerboard_size,
-        square_size_mm,
-        args.show_corners
-    )
-    
-    if obj_points is None:
-        logger.error("Failed to find checkerboard corners")
-        return 1
-    
-    # Calibrate camera
-    ret, camera_matrix, dist_coeffs, rvecs, tvecs = calibrate_camera(
-        obj_points,
-        img_points,
-        image_size
-    )
-    
-    # Calculate reprojection error
-    mean_error = calculate_reprojection_error(
-        obj_points,
-        img_points,
-        rvecs,
-        tvecs,
-        camera_matrix,
-        dist_coeffs
-    )
-    
-    logger.info(f"Mean reprojection error: {mean_error:.4f} pixels")
-    
-    # Print calibration results
-    print("\n" + "="*60)
-    print(f"Calibration results for {args.camera.upper()} camera:")
-    print("="*60)
-    print_camera_info(camera_matrix, dist_coeffs, image_size)
-    print(f"RMS error: {ret:.4f} pixels")
-    print(f"Mean reprojection error: {mean_error:.4f} pixels")
-    print("="*60 + "\n")
-    
-    # Save calibration data
-    save_calibration_data(
-        output_path,
-        camera_matrix=camera_matrix,
-        dist_coeffs=dist_coeffs,
-        rvecs=rvecs,
-        tvecs=tvecs,
-        image_width=image_size[0],
-        image_height=image_size[1],
-        rms_error=ret,
-        mean_reprojection_error=mean_error
-    )
-    
-    logger.info(f"Calibration saved to: {output_path}")
-    
-    # Recommendation based on error
-    if mean_error < 0.5:
-        logger.info("✓ Excellent calibration! (error < 0.5 pixels)")
-    elif mean_error < 1.0:
-        logger.info("✓ Good calibration (error < 1.0 pixels)")
-    else:
-        logger.warning("⚠ High calibration error. Consider recapturing images with better coverage.")
-    
-    return 0
+    print("\n==== SINGLE CAMERA CALIBRATION ====")
+    print(f"Camera model: {CAMERA_MODEL}")
+    print(f"Sensor: {SENSOR_TYPE}")
+    print(f"Sensor active area: {SENSOR_WIDTH_MM:.2f} mm (W) × {SENSOR_HEIGHT_MM:.2f} mm (H)")
+    print(f"Checkerboard: {CHECKERBOARD_ROWS} rows × {CHECKERBOARD_COLS} cols, square {SQUARE_SIZE_MM}mm")
+    print(f"Image resolution: {IMAGE_WIDTH}x{IMAGE_HEIGHT}")
+    print("Images will be saved to:", SAVE_DIR)
 
+    n_captured = capture_images()
+    if n_captured < 8:
+        print("Too few images, calibration aborted.")
+        return
+
+    obj_points, img_points, image_size = find_checkerboard_corners(
+        SAVE_DIR,
+        (CHECKERBOARD_ROWS, CHECKERBOARD_COLS),
+        SQUARE_SIZE_MM,
+        show_corners=True
+    )
+    if len(obj_points) < 8:
+        print("ERROR: Checkerboard not found in enough images! Try again.")
+        return
+
+    ret, K, D, mean_error = calibrate_camera(obj_points, img_points, image_size)
+
+    print("\n======= CALIBRATION RESULTS =======")
+    print("Camera intrinsic matrix (K):")
+    print(K)
+    print("Distortion coefficients (D):")
+    print(D)
+    print(f"Average reprojection error: {mean_error:.4f} px")
+    print("Full parameter explanations are shown overlayed on image.")
+
+    first_img = sorted([
+        f for f in os.listdir(SAVE_DIR)
+        if f.lower().endswith(('.png', '.jpg', '.jpeg'))
+    ])[0]
+    display_results_over_image(os.path.join(SAVE_DIR, first_img), K, D, mean_error)
 
 if __name__ == '__main__':
-    sys.exit(main())
+    main()
