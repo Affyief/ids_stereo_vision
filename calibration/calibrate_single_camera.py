@@ -15,11 +15,13 @@ Pixel size: 2.4 μm × 2.4 μm
 Active sensor area: 6.22 mm × 4.67 mm
 """
 
+import sys
 import os
 import cv2
 import numpy as np
 import time
 from pathlib import Path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # --- Import IDS camera interface from your repo ---
 from src.camera_interface import list_ids_peak_cameras, IDSPeakCamera
