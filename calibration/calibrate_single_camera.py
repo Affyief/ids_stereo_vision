@@ -3,7 +3,7 @@
 """
 Interactive Single Camera Calibration Tool
 
-- Opens a live view from your camera (IDS U3-3680XCP-C, Sony IMX178 sensor).
+- Opens a live view from your IDS U3-3680XCP-C (Sony IMX178 sensor) using IDS Peak SDK.
 - Press "c" to capture calibration images (stored to ./calib_captures/).
 - When target number of captures is reached, calibrates automatically.
 - Displays results overlayed on a calibration image, with full parameter names and explanations.
@@ -21,6 +21,9 @@ import numpy as np
 import time
 from pathlib import Path
 
+# --- Import IDS camera interface from your repo ---
+from src.camera_interface import list_ids_peak_cameras, IDSPeakCamera
+
 # ---- Camera and sensor details (precise, per datasheet) ----
 CAMERA_MODEL = "IDS U3-3680XCP-C"
 SENSOR_TYPE = "Sony IMX178 CMOS (1/1.8″)"
@@ -33,31 +36,41 @@ SENSOR_HEIGHT_MM = IMAGE_HEIGHT * PIXEL_SIZE_UM / 1000  # 4.67 mm
 # ---- Calibration pattern and session configuration ----
 SAVE_DIR = "calib_captures"
 NUM_IMAGES_NEEDED = 25
-CHECKERBOARD_ROWS = 5 # Number of inner corners in rows (chessboard squares - 1)
-CHECKERBOARD_COLS = 7 # Number of inner corners in columns (chessboard squares - 1)
-SQUARE_SIZE_MM = 15.0 # Actual side length of each calibration checkerboard square
+CHECKERBOARD_ROWS = 5 # Number of inner corners in rows
+CHECKERBOARD_COLS = 7 # Number of inner corners in columns
+SQUARE_SIZE_MM = 15.0 # Actual side length of each checkerboard square
 
 def ensure_dir(path):
     os.makedirs(path, exist_ok=True)
 
 def capture_images():
     ensure_dir(SAVE_DIR)
-    cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, IMAGE_WIDTH)
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, IMAGE_HEIGHT)
-    if not cap.isOpened():
-        print("ERROR: Could not open camera.")
+
+    # List available IDS Peak cameras and select the first one
+    cameras = list_ids_peak_cameras()
+    if len(cameras) < 1:
+        print("ERROR: No IDS Peak cameras detected.")
         exit(1)
-    
+    print("Available cameras:")
+    for idx, cam in enumerate(cameras):
+        print(f'  [{idx}] {cam["model"]} S/N {cam["serial"]} @ {cam["interface"]}')
+    cam_idx = 0
+    serial_number = cameras[cam_idx]['serial']
+    ids_camera = IDSPeakCamera(serial_number=serial_number)
+    if not ids_camera.initialize(IMAGE_WIDTH, IMAGE_HEIGHT, exposure_us=10000, gain_db=0.0, framerate=20, pixel_format="BGR8"):
+        print("ERROR: Failed to initialize IDS camera.")
+        exit(1)
+    print(f"Camera {serial_number} initialized.")
+
     print(f"\nCamera ready. Press 'c' to capture an image when the checkerboard is visible.")
     print(f"Capture at various angles/distances. Need {NUM_IMAGES_NEEDED} images total.")
     print("Press 'q' to quit early.")
 
     img_count = 0
     while img_count < NUM_IMAGES_NEEDED:
-        ret, frame = cap.read()
-        if not ret:
-            print("Failed to grab frame. Exiting.")
+        frame = ids_camera.capture_frame()
+        if frame is None:
+            print("Failed to grab frame from IDS camera. Exiting.")
             break
 
         display = frame.copy()
@@ -77,7 +90,7 @@ def capture_images():
             print("Quitting early.")
             break
 
-    cap.release()
+    ids_camera.release()
     cv2.destroyAllWindows()
     print(f"\nFinished image capture ({img_count} images).")
     return img_count
